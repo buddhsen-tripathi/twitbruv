@@ -66,6 +66,50 @@ export const api = {
     ),
   bookmarks: (cursor?: string) => request<FeedPage>(`/api/me/bookmarks${qs(cursor)}`),
 
+  notifications: (cursor?: string, unreadOnly = false) => {
+    const tail = unreadOnly ? (cursor ? "&unread=1" : "?unread=1") : ""
+    return request<{
+      notifications: Array<NotificationItem>
+      nextCursor: string | null
+    }>(`/api/notifications${qs(cursor)}${tail}`)
+  },
+  notificationsUnreadCount: () =>
+    request<{ count: number }>("/api/notifications/unread-count"),
+  notificationsMarkRead: (body: { ids?: Array<string>; all?: boolean }) =>
+    request<{ ok: true }>("/api/notifications/mark-read", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+
+  analyticsOverview: (days = 28) =>
+    request<AnalyticsOverview>(`/api/analytics/overview?days=${days}`),
+
+  dmConversations: () =>
+    request<{ conversations: Array<DmConversation> }>("/api/dms"),
+  dmUnreadCount: () => request<{ count: number }>("/api/dms/unread-count"),
+  dmStart: (userId: string) =>
+    request<{ id: string; created: boolean }>("/api/dms", {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    }),
+  dmMessages: (conversationId: string, cursor?: string) =>
+    request<{ messages: Array<DmMessage>; nextCursor: string | null }>(
+      `/api/dms/${conversationId}/messages${qs(cursor)}`,
+    ),
+  dmSend: (
+    conversationId: string,
+    body: { text?: string; sharedPostId?: string; sharedArticleId?: string },
+  ) =>
+    request<{ message: DmMessage }>(`/api/dms/${conversationId}/messages`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  dmMarkRead: (conversationId: string, messageId?: string) =>
+    request<{ ok: true }>(`/api/dms/${conversationId}/read`, {
+      method: "POST",
+      body: JSON.stringify(messageId ? { messageId } : {}),
+    }),
+
   createArticle: (body: ArticleInput) =>
     request<{ article: ArticleDto }>("/api/articles", {
       method: "POST",
@@ -158,6 +202,10 @@ export interface Post {
   }
   media?: Array<PostMedia>
   articleCard?: PostArticleCard
+  /** Populated on repost rows: the original post to render with a "reposted by" banner. */
+  repostOf?: Post
+  /** Populated on quote rows: the post being quoted, rendered as a bordered embed below the text. */
+  quoteOf?: Post
 }
 
 export interface PostArticleCard {
@@ -248,6 +296,30 @@ export interface Thread {
   replies: Array<Post>
 }
 
+export interface NotificationItem {
+  id: string
+  kind:
+    | "like"
+    | "repost"
+    | "reply"
+    | "mention"
+    | "follow"
+    | "dm"
+    | "article_reply"
+    | "quote"
+  createdAt: string
+  readAt: string | null
+  entityType: string | null
+  entityId: string | null
+  actor: {
+    id: string
+    handle: string | null
+    displayName: string | null
+    avatarUrl: string | null
+    isVerified: boolean
+  } | null
+}
+
 export interface ArticleInput {
   title: string
   subtitle?: string
@@ -294,4 +366,59 @@ export interface ArticleDto {
     avatarUrl: string | null
     isVerified: boolean
   }
+}
+
+export interface DmMember {
+  id: string
+  handle: string | null
+  displayName: string | null
+  avatarUrl: string | null
+  isVerified: boolean
+}
+
+export interface DmConversation {
+  id: string
+  kind: "dm" | "group"
+  title: string | null
+  createdAt: string
+  lastMessageAt: string | null
+  unreadCount: number
+  members: Array<DmMember>
+  lastMessage: {
+    id: string
+    senderId: string
+    kind: "text" | "media" | "post_share" | "article_share" | "system"
+    text: string | null
+    createdAt: string
+  } | null
+}
+
+export interface DmMessage {
+  id: string
+  conversationId: string
+  senderId: string
+  kind: "text" | "media" | "post_share" | "article_share" | "system"
+  text: string | null
+  sharedPostId: string | null
+  sharedArticleId: string | null
+  editedAt: string | null
+  createdAt: string
+  sender?: DmMember
+}
+
+export interface AnalyticsOverview {
+  period: { days: number; since: string }
+  totals: {
+    impressions: number
+    engagements: number
+    likes: number
+    reposts: number
+    replies: number
+    bookmarks: number
+    quotes: number
+    newFollowers: number
+    engagementRate: number
+  }
+  followerGrowth: Array<{ day: string; newFollowers: number }>
+  topPosts: Array<Post>
 }

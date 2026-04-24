@@ -3,6 +3,7 @@ import { cors } from 'hono/cors'
 import { logger } from 'hono/logger'
 import { secureHeaders } from 'hono/secure-headers'
 import { buildContext } from './lib/context.ts'
+import { handleRateLimitError } from './lib/rate-limit.ts'
 import { sessionMiddleware, type HonoEnv } from './middleware/session.ts'
 import { meRoute } from './routes/me.ts'
 import { usersRoute } from './routes/users.ts'
@@ -12,6 +13,9 @@ import { hashtagsRoute } from './routes/hashtags.ts'
 import { searchRoute } from './routes/search.ts'
 import { createMediaRoute } from './routes/media.ts'
 import { articlesRoute } from './routes/articles.ts'
+import { notificationsRoute } from './routes/notifications.ts'
+import { analyticsRoute } from './routes/analytics.ts'
+import { dmsRoute } from './routes/dms.ts'
 
 const ctx = await buildContext()
 const app = new Hono<HonoEnv>()
@@ -45,9 +49,14 @@ app.route('/api/hashtags', hashtagsRoute)
 app.route('/api/search', searchRoute)
 app.route('/api/media', createMediaRoute({ s3: ctx.s3, mediaEnv: ctx.mediaEnv, boss: ctx.boss }))
 app.route('/api/articles', articlesRoute)
+app.route('/api/notifications', notificationsRoute)
+app.route('/api/analytics', analyticsRoute)
+app.route('/api/dms', dmsRoute)
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404))
 app.onError((err, c) => {
+  const rateLimited = handleRateLimitError(err, c)
+  if (rateLimited) return rateLimited
   console.error(err)
   return c.json({ error: 'internal_error', message: err.message }, 500)
 })

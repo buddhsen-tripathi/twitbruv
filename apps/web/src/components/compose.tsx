@@ -21,10 +21,15 @@ interface PendingAttachment {
 export function Compose({
   onCreated,
   replyToId,
+  quoteOfId,
+  quoted,
   placeholder = "What's happening?",
 }: {
   onCreated?: (post: Post) => void
   replyToId?: string
+  quoteOfId?: string
+  /** When quoting, render a summary of the quoted post so the author knows what's attached. */
+  quoted?: Post
   placeholder?: string
 }) {
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -41,7 +46,8 @@ export function Compose({
   const readyMediaIds = attachments
     .filter((a) => a.status === "ready" && a.media)
     .map((a) => a.media!.id)
-  const hasContent = text.trim().length > 0 || readyMediaIds.length > 0
+  const hasContent =
+    text.trim().length > 0 || readyMediaIds.length > 0 || Boolean(quoteOfId)
   const noneUploading = attachments.every((a) => a.status !== "uploading")
   const canSubmit = hasContent && remaining >= 0 && noneUploading && !loading
 
@@ -98,6 +104,7 @@ export function Compose({
       const { post } = await api.createPost({
         text: text.trim(),
         replyToId,
+        quoteOfId,
         mediaIds: readyMediaIds.length > 0 ? readyMediaIds : undefined,
       })
       setText("")
@@ -148,6 +155,18 @@ export function Compose({
           rows={3}
           className="w-full resize-none bg-transparent text-[15px] leading-relaxed placeholder:text-muted-foreground focus:outline-none"
         />
+
+        {quoted && (
+          <div className="mt-2 rounded-md border border-border p-3 text-sm">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">
+                {quoted.author.displayName || `@${quoted.author.handle ?? "unknown"}`}
+              </span>
+              {quoted.author.handle && <span>@{quoted.author.handle}</span>}
+            </div>
+            <p className="mt-1 line-clamp-3 whitespace-pre-wrap break-words">{quoted.text}</p>
+          </div>
+        )}
 
         {attachments.length > 0 && (
           <div className="mt-2 grid grid-cols-2 gap-2">
@@ -221,7 +240,7 @@ export function Compose({
           <div className="flex items-center gap-2">
             {error && <span className="text-xs text-destructive">{error}</span>}
             <Button type="submit" disabled={!canSubmit} size="lg">
-              {loading ? "Posting…" : replyToId ? "Reply" : "Post"}
+              {loading ? "Posting…" : replyToId ? "Reply" : quoteOfId ? "Quote" : "Post"}
             </Button>
           </div>
         </div>

@@ -34,7 +34,8 @@ export function createMediaRoute(deps: MediaDeps) {
 
   route.post('/intent', requireAuth(), async (c) => {
     const session = c.get('session')!
-    const { db } = c.get('ctx')
+    const { db, rateLimit } = c.get('ctx')
+    await rateLimit(c, 'media.upload')
     const body = intentSchema.parse(await c.req.json())
 
     if (!ALLOWED_IMAGE_MIMES.has(body.mime)) {

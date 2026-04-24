@@ -6,6 +6,8 @@ import { createS3, ensureBucket, type S3 } from '@workspace/media/s3'
 import type { MediaEnv } from '@workspace/media/env'
 import { loadEnv, type Env } from './env.ts'
 import { createCache, type Cache } from './cache.ts'
+import { createPubSub, type PubSub } from './pubsub.ts'
+import { makeRateLimit } from './rate-limit.ts'
 
 export interface AppContext {
   env: Env
@@ -16,6 +18,8 @@ export interface AppContext {
   mediaEnv: MediaEnv
   boss: PgBoss
   cache: Cache
+  pubsub: PubSub
+  rateLimit: ReturnType<typeof makeRateLimit>
 }
 
 export async function buildContext(): Promise<AppContext> {
@@ -77,6 +81,8 @@ export async function buildContext(): Promise<AppContext> {
   // processes concurrently deadlocks on pgboss.queue row locks in Postgres.
 
   const cache = createCache(env.REDIS_URL)
+  const pubsub = createPubSub(env.REDIS_URL)
+  const rateLimit = makeRateLimit(env.REDIS_URL)
 
-  return { env, db, mailer, auth, s3, mediaEnv, boss, cache }
+  return { env, db, mailer, auth, s3, mediaEnv, boss, cache, pubsub, rateLimit }
 }

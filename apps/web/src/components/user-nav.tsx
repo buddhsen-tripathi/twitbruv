@@ -1,5 +1,6 @@
 import { Link, useRouter } from "@tanstack/react-router"
 import {
+  IconChartBar,
   IconDeviceDesktop,
   IconLogout,
   IconMoon,
@@ -19,7 +20,7 @@ import {
   DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
-import { SidebarMenuButton, useSidebar } from "@workspace/ui/components/sidebar"
+import { SidebarMenuButton } from "@workspace/ui/components/sidebar"
 import { Avatar } from "./avatar"
 import { authClient } from "../lib/auth"
 import { useTheme } from "../lib/theme"
@@ -29,7 +30,6 @@ import type { SelfUser } from "../lib/api"
 export function UserNav({ user }: { user: SelfUser }) {
   const router = useRouter()
   const { theme, setTheme } = useTheme()
-  const { isMobile } = useSidebar()
 
   async function onSignOut() {
     await authClient.signOut()
@@ -65,7 +65,7 @@ export function UserNav({ user }: { user: SelfUser }) {
         }
       />
       <DropdownMenuContent
-        side={isMobile ? "bottom" : "right"}
+        side="top"
         align="end"
         sideOffset={8}
         className="w-56"
@@ -88,6 +88,10 @@ export function UserNav({ user }: { user: SelfUser }) {
             <span>Profile</span>
           </DropdownMenuItem>
         )}
+        <DropdownMenuItem render={<Link to="/analytics" />}>
+          <IconChartBar size={16} stroke={1.75} />
+          <span>Analytics</span>
+        </DropdownMenuItem>
         <DropdownMenuItem render={<Link to="/settings" />}>
           <IconSettings size={16} stroke={1.75} />
           <span>Settings</span>

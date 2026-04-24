@@ -6,6 +6,8 @@ import { toPostDto } from '../lib/post-dto.ts'
 import { loadViewerFlags } from '../lib/viewer-flags.ts'
 import { loadPostMedia } from '../lib/post-media.ts'
 import { loadArticleCards } from '../lib/article-cards.ts'
+import { loadRepostTargets } from '../lib/repost-targets.ts'
+import { loadQuoteTargets } from '../lib/quote-targets.ts'
 
 export const searchRoute = new Hono<HonoEnv>()
 
@@ -55,10 +57,22 @@ searchRoute.get('/', async (c) => {
     .limit(40)
 
   const ids = postRows.map((r) => r.post.id)
-  const [flags, mediaMap, articleMap] = await Promise.all([
+  const [flags, mediaMap, articleMap, repostMap, quoteMap] = await Promise.all([
     loadViewerFlags(db, viewerId, ids),
     loadPostMedia(db, ids),
     loadArticleCards(db, ids),
+    loadRepostTargets({
+      db,
+      viewerId,
+      env: mediaEnv,
+      repostRows: postRows.map((r) => ({ id: r.post.id, repostOfId: r.post.repostOfId })),
+    }),
+    loadQuoteTargets({
+      db,
+      viewerId,
+      env: mediaEnv,
+      quoteRows: postRows.map((r) => ({ id: r.post.id, quoteOfId: r.post.quoteOfId })),
+    }),
   ])
   const posts = postRows.map((r) =>
     toPostDto(
@@ -68,6 +82,8 @@ searchRoute.get('/', async (c) => {
       mediaMap.get(r.post.id),
       mediaEnv,
       articleMap.get(r.post.id),
+      repostMap.get(r.post.id),
+      quoteMap.get(r.post.id),
     ),
   )
   return c.json({ users, posts })

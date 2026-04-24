@@ -12,11 +12,16 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as NotificationsRouteImport } from './routes/notifications'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as BookmarksRouteImport } from './routes/bookmarks'
+import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as HandleRouteImport } from './routes/$handle'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as InboxIndexRouteImport } from './routes/inbox.index'
 import { Route as HandleIndexRouteImport } from './routes/$handle.index'
+import { Route as InboxConversationIdRouteImport } from './routes/inbox.$conversationId'
 import { Route as HashtagTagRouteImport } from './routes/hashtag.$tag'
 import { Route as ArticlesNewRouteImport } from './routes/articles.new'
 import { Route as HandleFollowingRouteImport } from './routes/$handle.following'
@@ -40,14 +45,29 @@ const SearchRoute = SearchRouteImport.update({
   path: '/search',
   getParentRoute: () => rootRouteImport,
 } as any)
+const NotificationsRoute = NotificationsRouteImport.update({
+  id: '/notifications',
+  path: '/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InboxRoute = InboxRouteImport.update({
+  id: '/inbox',
+  path: '/inbox',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const BookmarksRoute = BookmarksRouteImport.update({
   id: '/bookmarks',
   path: '/bookmarks',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalyticsRoute = AnalyticsRouteImport.update({
+  id: '/analytics',
+  path: '/analytics',
   getParentRoute: () => rootRouteImport,
 } as any)
 const HandleRoute = HandleRouteImport.update({
@@ -60,10 +80,20 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const InboxIndexRoute = InboxIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => InboxRoute,
+} as any)
 const HandleIndexRoute = HandleIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => HandleRoute,
+} as any)
+const InboxConversationIdRoute = InboxConversationIdRouteImport.update({
+  id: '/$conversationId',
+  path: '/$conversationId',
+  getParentRoute: () => InboxRoute,
 } as any)
 const HashtagTagRoute = HashtagTagRouteImport.update({
   id: '/hashtag/$tag',
@@ -104,8 +134,11 @@ const HandleASlugRoute = HandleASlugRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$handle': typeof HandleRouteWithChildren
+  '/analytics': typeof AnalyticsRoute
   '/bookmarks': typeof BookmarksRoute
+  '/inbox': typeof InboxRouteWithChildren
   '/login': typeof LoginRoute
+  '/notifications': typeof NotificationsRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
@@ -113,15 +146,19 @@ export interface FileRoutesByFullPath {
   '/$handle/following': typeof HandleFollowingRoute
   '/articles/new': typeof ArticlesNewRoute
   '/hashtag/$tag': typeof HashtagTagRoute
+  '/inbox/$conversationId': typeof InboxConversationIdRoute
   '/$handle/': typeof HandleIndexRoute
+  '/inbox/': typeof InboxIndexRoute
   '/$handle/a/$slug': typeof HandleASlugRoute
   '/$handle/p/$id': typeof HandlePIdRoute
   '/articles/$id/edit': typeof ArticlesIdEditRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/analytics': typeof AnalyticsRoute
   '/bookmarks': typeof BookmarksRoute
   '/login': typeof LoginRoute
+  '/notifications': typeof NotificationsRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
@@ -129,7 +166,9 @@ export interface FileRoutesByTo {
   '/$handle/following': typeof HandleFollowingRoute
   '/articles/new': typeof ArticlesNewRoute
   '/hashtag/$tag': typeof HashtagTagRoute
+  '/inbox/$conversationId': typeof InboxConversationIdRoute
   '/$handle': typeof HandleIndexRoute
+  '/inbox': typeof InboxIndexRoute
   '/$handle/a/$slug': typeof HandleASlugRoute
   '/$handle/p/$id': typeof HandlePIdRoute
   '/articles/$id/edit': typeof ArticlesIdEditRoute
@@ -138,8 +177,11 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$handle': typeof HandleRouteWithChildren
+  '/analytics': typeof AnalyticsRoute
   '/bookmarks': typeof BookmarksRoute
+  '/inbox': typeof InboxRouteWithChildren
   '/login': typeof LoginRoute
+  '/notifications': typeof NotificationsRoute
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
@@ -147,7 +189,9 @@ export interface FileRoutesById {
   '/$handle/following': typeof HandleFollowingRoute
   '/articles/new': typeof ArticlesNewRoute
   '/hashtag/$tag': typeof HashtagTagRoute
+  '/inbox/$conversationId': typeof InboxConversationIdRoute
   '/$handle/': typeof HandleIndexRoute
+  '/inbox/': typeof InboxIndexRoute
   '/$handle/a/$slug': typeof HandleASlugRoute
   '/$handle/p/$id': typeof HandlePIdRoute
   '/articles/$id/edit': typeof ArticlesIdEditRoute
@@ -157,8 +201,11 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$handle'
+    | '/analytics'
     | '/bookmarks'
+    | '/inbox'
     | '/login'
+    | '/notifications'
     | '/search'
     | '/settings'
     | '/signup'
@@ -166,15 +213,19 @@ export interface FileRouteTypes {
     | '/$handle/following'
     | '/articles/new'
     | '/hashtag/$tag'
+    | '/inbox/$conversationId'
     | '/$handle/'
+    | '/inbox/'
     | '/$handle/a/$slug'
     | '/$handle/p/$id'
     | '/articles/$id/edit'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/analytics'
     | '/bookmarks'
     | '/login'
+    | '/notifications'
     | '/search'
     | '/settings'
     | '/signup'
@@ -182,7 +233,9 @@ export interface FileRouteTypes {
     | '/$handle/following'
     | '/articles/new'
     | '/hashtag/$tag'
+    | '/inbox/$conversationId'
     | '/$handle'
+    | '/inbox'
     | '/$handle/a/$slug'
     | '/$handle/p/$id'
     | '/articles/$id/edit'
@@ -190,8 +243,11 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/$handle'
+    | '/analytics'
     | '/bookmarks'
+    | '/inbox'
     | '/login'
+    | '/notifications'
     | '/search'
     | '/settings'
     | '/signup'
@@ -199,7 +255,9 @@ export interface FileRouteTypes {
     | '/$handle/following'
     | '/articles/new'
     | '/hashtag/$tag'
+    | '/inbox/$conversationId'
     | '/$handle/'
+    | '/inbox/'
     | '/$handle/a/$slug'
     | '/$handle/p/$id'
     | '/articles/$id/edit'
@@ -208,8 +266,11 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   HandleRoute: typeof HandleRouteWithChildren
+  AnalyticsRoute: typeof AnalyticsRoute
   BookmarksRoute: typeof BookmarksRoute
+  InboxRoute: typeof InboxRouteWithChildren
   LoginRoute: typeof LoginRoute
+  NotificationsRoute: typeof NotificationsRoute
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
@@ -241,6 +302,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SearchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/notifications': {
+      id: '/notifications'
+      path: '/notifications'
+      fullPath: '/notifications'
+      preLoaderRoute: typeof NotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
@@ -248,11 +316,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/inbox': {
+      id: '/inbox'
+      path: '/inbox'
+      fullPath: '/inbox'
+      preLoaderRoute: typeof InboxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/bookmarks': {
       id: '/bookmarks'
       path: '/bookmarks'
       fullPath: '/bookmarks'
       preLoaderRoute: typeof BookmarksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analytics': {
+      id: '/analytics'
+      path: '/analytics'
+      fullPath: '/analytics'
+      preLoaderRoute: typeof AnalyticsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/$handle': {
@@ -269,12 +351,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/inbox/': {
+      id: '/inbox/'
+      path: '/'
+      fullPath: '/inbox/'
+      preLoaderRoute: typeof InboxIndexRouteImport
+      parentRoute: typeof InboxRoute
+    }
     '/$handle/': {
       id: '/$handle/'
       path: '/'
       fullPath: '/$handle/'
       preLoaderRoute: typeof HandleIndexRouteImport
       parentRoute: typeof HandleRoute
+    }
+    '/inbox/$conversationId': {
+      id: '/inbox/$conversationId'
+      path: '/$conversationId'
+      fullPath: '/inbox/$conversationId'
+      preLoaderRoute: typeof InboxConversationIdRouteImport
+      parentRoute: typeof InboxRoute
     }
     '/hashtag/$tag': {
       id: '/hashtag/$tag'
@@ -347,11 +443,26 @@ const HandleRouteChildren: HandleRouteChildren = {
 const HandleRouteWithChildren =
   HandleRoute._addFileChildren(HandleRouteChildren)
 
+interface InboxRouteChildren {
+  InboxConversationIdRoute: typeof InboxConversationIdRoute
+  InboxIndexRoute: typeof InboxIndexRoute
+}
+
+const InboxRouteChildren: InboxRouteChildren = {
+  InboxConversationIdRoute: InboxConversationIdRoute,
+  InboxIndexRoute: InboxIndexRoute,
+}
+
+const InboxRouteWithChildren = InboxRoute._addFileChildren(InboxRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HandleRoute: HandleRouteWithChildren,
+  AnalyticsRoute: AnalyticsRoute,
   BookmarksRoute: BookmarksRoute,
+  InboxRoute: InboxRouteWithChildren,
   LoginRoute: LoginRoute,
+  NotificationsRoute: NotificationsRoute,
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,

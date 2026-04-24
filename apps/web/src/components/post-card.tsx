@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
+import { recordImpression } from "../lib/analytics"
 import {
   IconBookmark,
   IconBookmarkFilled,
@@ -8,6 +9,7 @@ import {
   IconHeartFilled,
   IconMessageCircle,
   IconPencil,
+  IconQuote,
   IconRepeat,
   IconTrash,
 } from "@tabler/icons-react"
@@ -18,11 +20,19 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@workspace/ui/components/dialog"
 import { POST_MAX_LEN } from "@workspace/validators"
 import { authClient } from "../lib/auth"
 import { ApiError, api } from "../lib/api"
 import { Avatar } from "./avatar"
 import { ImageLightbox } from "./image-lightbox"
+import { Compose } from "./compose"
 import type { Post } from "../lib/api"
 
 function relativeTime(iso: string): string {
@@ -47,7 +57,7 @@ function linkifyText(text: string) {
   }> = []
   let last = 0
   for (const match of text.matchAll(regex)) {
-    const idx = match.index ?? 0
+    const idx = match.index
     if (idx > last) parts.push({ type: "text", value: text.slice(last, idx) })
     const value = match[0]
     if (value.startsWith("#")) parts.push({ type: "hashtag", value })
@@ -124,6 +134,52 @@ function ArticleCardBlock({
   )
 }
 
+function QuoteEmbed({ post }: { post: Post }) {
+  const handle = post.author.handle
+  const thumb = post.media?.find((m) => m.processingState === "ready")
+  const variant =
+    thumb?.variants.find((v) => v.kind === "thumb") ??
+    thumb?.variants.find((v) => v.kind === "medium") ??
+    thumb?.variants[0]
+  const content = (
+    <div className="mt-2 overflow-hidden rounded-md border border-border transition hover:bg-muted/40">
+      <div className="flex gap-3 p-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2 text-xs">
+            <span className="font-semibold text-foreground">
+              {post.author.displayName || `@${handle ?? "unknown"}`}
+            </span>
+            {handle && <span className="text-muted-foreground">@{handle}</span>}
+            <span className="text-muted-foreground">·</span>
+            <time className="text-muted-foreground" dateTime={post.createdAt}>
+              {relativeTime(post.createdAt)}
+            </time>
+          </div>
+          {post.text && (
+            <p className="mt-1 line-clamp-4 text-sm leading-relaxed whitespace-pre-wrap break-words">
+              {post.text}
+            </p>
+          )}
+        </div>
+        {variant && (
+          <div className="size-20 shrink-0 overflow-hidden rounded">
+            <img src={variant.url} alt="" className="h-full w-full object-cover" />
+          </div>
+        )}
+      </div>
+    </div>
+  )
+  // Whole card is a link to the quoted post's detail page.
+  if (handle) {
+    return (
+      <Link to="/$handle/p/$id" params={{ handle, id: post.id }} className="block">
+        {content}
+      </Link>
+    )
+  }
+  return content
+}
+
 function MediaGrid({ media }: { media: NonNullable<Post["media"]> }) {
   const cols = media.length === 1 ? "grid-cols-1" : "grid-cols-2"
   // Single gallery shared by all tiles — each cell opens the lightbox at its own index, so
@@ -176,7 +232,7 @@ function MediaGrid({ media }: { media: NonNullable<Post["media"]> }) {
 }
 
 export function PostCard({
-  post,
+  post: outerPost,
   onChange,
   onRemove,
 }: {
@@ -185,7 +241,55 @@ export function PostCard({
   onRemove?: (id: string) => void
 }) {
   const { data: session } = authClient.useSession()
+  const isRepost = Boolean(outerPost.repostOf)
+  // The post we actually render. For a repost row we render the original post's content,
+  // author, counters, and engage with ITS id.
+  const post = outerPost.repostOf ?? outerPost
+
   const isOwner = Boolean(session?.user && session.user.id === post.author.id)
+
+  // Fire one impression per post per session when the card dwells ≥50% in viewport for ≥1s.
+  const articleRef = useRef<HTMLElement>(null)
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const el = articleRef.current
+    if (!el) return
+    let visibleSince: number | null = null
+    let fired = false
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.intersectionRatio >= 0.5) {
+            if (visibleSince === null) visibleSince = Date.now()
+            if (!fired && Date.now() - visibleSince >= 1000) {
+              recordImpression({ kind: "impression", subjectType: "post", subjectId: post.id })
+              fired = true
+              observer.disconnect()
+            }
+          } else {
+            visibleSince = null
+          }
+        }
+      },
+      { threshold: [0, 0.5, 1] },
+    )
+    observer.observe(el)
+    // Re-check periodically while intersecting — observers only fire on threshold change, not
+    // on time. A tiny interval advances the dwell check without extra observer events.
+    const iv = window.setInterval(() => {
+      if (fired || visibleSince === null) return
+      if (Date.now() - visibleSince >= 1000) {
+        recordImpression({ kind: "impression", subjectType: "post", subjectId: post.id })
+        fired = true
+        observer.disconnect()
+        window.clearInterval(iv)
+      }
+    }, 250)
+    return () => {
+      observer.disconnect()
+      window.clearInterval(iv)
+    }
+  }, [post.id])
   const [busy, setBusy] = useState(false)
   const [editing, setEditing] = useState(false)
   const [editText, setEditText] = useState(post.text)
@@ -196,13 +300,20 @@ export function PostCard({
   const canEdit =
     isOwner && Date.now() - new Date(post.createdAt).getTime() < EDIT_WINDOW_MS
 
+  // When we optimistically mutate, we need to write back into the right slot of the outer post.
+  function emit(next: Post) {
+    if (!onChange) return
+    if (isRepost) onChange({ ...outerPost, repostOf: next })
+    else onChange(next)
+  }
+
   async function onDelete() {
     if (busy) return
     if (!confirm("Delete this post?")) return
     setBusy(true)
     try {
       await api.deletePost(post.id)
-      onRemove?.(post.id)
+      onRemove?.(outerPost.id)
     } catch (e) {
       alert(e instanceof ApiError ? e.message : "delete failed")
     } finally {
@@ -224,7 +335,7 @@ export function PostCard({
     setEditError(null)
     try {
       const { post: updated } = await api.editPost(post.id, editText)
-      onChange?.(updated)
+      emit(updated)
       setEditing(false)
     } catch (e) {
       setEditError(e instanceof ApiError ? e.message : "edit failed")
@@ -243,12 +354,12 @@ export function PostCard({
       return
     }
     const prev = post
-    onChange({ ...post, ...next } as Post)
+    emit({ ...post, ...next } as Post)
     setBusy(true)
     try {
       await op()
     } catch {
-      onChange(prev)
+      emit(prev)
     } finally {
       setBusy(false)
     }
@@ -300,7 +411,24 @@ export function PostCard({
     .toUpperCase()
 
   return (
-    <article className="flex gap-3 border-b border-border px-4 py-4 transition-colors hover:bg-muted/20">
+    <article
+      ref={articleRef}
+      className="border-b border-border px-4 py-4 transition-colors hover:bg-muted/20"
+    >
+      {isRepost && outerPost.author.handle && (
+        <Link
+          to="/$handle"
+          params={{ handle: outerPost.author.handle }}
+          className="mb-2 ml-10 flex items-center gap-1.5 text-xs text-muted-foreground hover:underline"
+        >
+          <IconRepeat size={14} stroke={1.75} />
+          <span>
+            Reposted by{" "}
+            {outerPost.author.displayName || `@${outerPost.author.handle}`}
+          </span>
+        </Link>
+      )}
+      <div className="flex gap-3">
       <div className="shrink-0">
         {authorHandle ? (
           <Link to="/$handle" params={{ handle: authorHandle }}>
@@ -434,7 +562,7 @@ export function PostCard({
             </div>
           </div>
         ) : post.articleCard ? null : (
-          <p className="mt-1 text-[15px] leading-relaxed break-words whitespace-pre-wrap">
+          <p className="wrap-break-words mt-1 text-[15px] leading-relaxed whitespace-pre-wrap">
             {parts.map((p, i) => {
               if (p.type === "text") return <span key={i}>{p.value}</span>
               if (p.type === "hashtag")
@@ -478,6 +606,7 @@ export function PostCard({
         {post.media && post.media.length > 0 && (
           <MediaGrid media={post.media} />
         )}
+        {post.quoteOf && <QuoteEmbed post={post.quoteOf} />}
         <footer className="mt-3 flex items-center gap-2 text-sm text-muted-foreground">
           {showPostLink && authorHandle && (
             <Button
@@ -498,17 +627,25 @@ export function PostCard({
               }
             />
           )}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={toggleRepost}
-            disabled={busy || !post.viewer}
-            className={`flex cursor-pointer items-center gap-2 transition hover:text-foreground ${post.viewer?.reposted ? "text-emerald-600" : ""}`}
-            aria-pressed={post.viewer?.reposted}
-          >
-            <IconRepeat className="size-4" />
-            <span className="text-xs">{post.counts.reposts}</span>
-          </Button>
+          <RepostControl
+            post={post}
+            busy={busy}
+            onToggleRepost={toggleRepost}
+            onQuoteCreated={(quote) => {
+              // The newly created quote-post itself doesn't live in this card's state; its
+              // appearance in the feed is handled by whichever page rendered Compose. But the
+              // quoted post's quoteCount bumps up, so mirror that optimistic state.
+              if (post.viewer) {
+                emit({
+                  ...post,
+                  counts: { ...post.counts, quotes: post.counts.quotes + 1 },
+                })
+              }
+              // Suppress unused-var warning; callers who want to consume the quote post can
+              // subscribe via other surfaces (home feed invalidation already handles it).
+              void quote
+            }}
+          />
           <Button
             variant="ghost"
             size="sm"
@@ -541,6 +678,89 @@ export function PostCard({
           </Button>
         </footer>
       </div>
+      </div>
     </article>
+  )
+}
+
+function RepostControl({
+  post,
+  busy,
+  onToggleRepost,
+  onQuoteCreated,
+}: {
+  post: Post
+  busy: boolean
+  onToggleRepost: () => void
+  onQuoteCreated: (quote: Post) => void
+}) {
+  const [quoteOpen, setQuoteOpen] = useState(false)
+  const reposted = Boolean(post.viewer?.reposted)
+  const disabled = busy || !post.viewer
+
+  // When already reposted, click the icon to un-repost directly (Twitter pattern).
+  if (reposted) {
+    return (
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onToggleRepost}
+        disabled={disabled}
+        className="flex cursor-pointer items-center gap-2 text-emerald-600 transition hover:text-foreground"
+        aria-pressed
+      >
+        <IconRepeat className="size-4" />
+        <span className="text-xs">{post.counts.reposts + post.counts.quotes}</span>
+      </Button>
+    )
+  }
+
+  return (
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={disabled}
+              className="flex cursor-pointer items-center gap-2 transition hover:text-foreground"
+            >
+              <IconRepeat className="size-4" />
+              <span className="text-xs">{post.counts.reposts + post.counts.quotes}</span>
+            </Button>
+          }
+        />
+        {/* dropdown options populated below */}
+        <DropdownMenuContent align="start" sideOffset={4} className="w-40">
+          <DropdownMenuItem onClick={onToggleRepost}>
+            <IconRepeat className="size-3.5" />
+            <span>Repost</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={() => setQuoteOpen(true)}>
+            <IconQuote className="size-3.5" />
+            <span>Quote post</span>
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Dialog open={quoteOpen} onOpenChange={setQuoteOpen}>
+        <DialogContent className="max-w-lg p-0">
+          <DialogHeader className="border-b border-border px-4 py-3">
+            <DialogTitle className="text-sm font-semibold">Quote post</DialogTitle>
+            <DialogDescription className="sr-only">
+              Write your commentary. The original post will be attached.
+            </DialogDescription>
+          </DialogHeader>
+          <Compose
+            quoteOfId={post.id}
+            quoted={post}
+            onCreated={(created) => {
+              onQuoteCreated(created)
+              setQuoteOpen(false)
+            }}
+          />
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }

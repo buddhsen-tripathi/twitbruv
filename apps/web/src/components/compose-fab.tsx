@@ -20,8 +20,8 @@ export function ComposeFab() {
         render={
           <Button
             variant="default"
-            size="icon-lg"
-            className="fixed right-6 bottom-6 size-16 rounded-full shadow-lg shadow-primary/30"
+            size="icon"
+            className="fixed right-6 bottom-6 size-14 rounded-full shadow-lg shadow-primary/30"
           >
             <IconPencilPlus className="size-6" />
           </Button>

@@ -1,12 +1,12 @@
 import { Link } from "@tanstack/react-router"
 import {
+  IconBell,
   IconBookmark,
   IconHome,
   IconLogin,
+  IconMail,
   IconPencil,
   IconSearch,
-  IconSettings,
-  IconUser,
   IconUserPlus,
 } from "@tabler/icons-react"
 import {
@@ -24,15 +24,20 @@ import {
 } from "@workspace/ui/components/sidebar"
 import { TooltipProvider } from "@workspace/ui/components/tooltip"
 import { authClient } from "../lib/auth"
+import { api } from "../lib/api"
+import { subscribeToDmStream } from "../lib/dm-stream"
 import { useMe } from "../lib/me"
 import { AppHeader } from "./app-header"
 import { UserNav } from "./user-nav"
 import { ComposeFab } from "./compose-fab"
 import type { ReactNode } from "react"
+import { useEffect, useState } from "react"
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { data: session, isPending } = authClient.useSession()
   const { me } = useMe()
+  const unread = useUnreadNotifications(Boolean(session))
+  const dmUnread = useUnreadDms(Boolean(session))
 
   return (
     <TooltipProvider>
@@ -82,6 +87,40 @@ export function AppShell({ children }: { children: ReactNode }) {
                       <SidebarMenuItem>
                         <SidebarMenuButton
                           size="default"
+                          tooltip="notifications"
+                          render={
+                            <Link to="/notifications">
+                              <IconBell />
+                              <span>Notifications</span>
+                              {unread > 0 && (
+                                <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground group-data-[collapsible=icon]:hidden">
+                                  {unread > 99 ? "99+" : unread}
+                                </span>
+                              )}
+                            </Link>
+                          }
+                        />
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          size="default"
+                          tooltip="messages"
+                          render={
+                            <Link to="/inbox">
+                              <IconMail />
+                              <span>Messages</span>
+                              {dmUnread > 0 && (
+                                <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground group-data-[collapsible=icon]:hidden">
+                                  {dmUnread > 99 ? "99+" : dmUnread}
+                                </span>
+                              )}
+                            </Link>
+                          }
+                        />
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          size="default"
                           tooltip="bookmarks"
                           render={
                             <Link to="/bookmarks">
@@ -103,7 +142,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                           }
                         />
                       </SidebarMenuItem>
-                      {me?.handle && (
+                      {/* {me?.handle && (
                         <SidebarMenuItem>
                           <SidebarMenuButton
                             size="default"
@@ -119,8 +158,8 @@ export function AppShell({ children }: { children: ReactNode }) {
                             }
                           />
                         </SidebarMenuItem>
-                      )}
-                      <SidebarMenuItem>
+                      )} */}
+                      {/* <SidebarMenuItem>
                         <SidebarMenuButton
                           size="default"
                           tooltip="settings"
@@ -131,7 +170,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                             </Link>
                           }
                         />
-                      </SidebarMenuItem>
+                      </SidebarMenuItem> */}
                     </>
                   )}
                 </SidebarMenu>
@@ -187,4 +226,64 @@ export function AppShell({ children }: { children: ReactNode }) {
       </SidebarProvider>
     </TooltipProvider>
   )
+}
+
+function useUnreadNotifications(enabled: boolean) {
+  const [count, setCount] = useState(0)
+  useEffect(() => {
+    if (!enabled) {
+      setCount(0)
+      return
+    }
+    let cancel = false
+    async function tick() {
+      try {
+        const { count } = await api.notificationsUnreadCount()
+        if (!cancel) setCount(count)
+      } catch {
+        /* network blip; try again next tick */
+      }
+    }
+    tick()
+    const iv = setInterval(tick, 60_000)
+    return () => {
+      cancel = true
+      clearInterval(iv)
+    }
+  }, [enabled])
+  return count
+}
+
+function useUnreadDms(enabled: boolean) {
+  const [count, setCount] = useState(0)
+  useEffect(() => {
+    if (!enabled) {
+      setCount(0)
+      return
+    }
+    let cancel = false
+    async function refresh() {
+      try {
+        const { count } = await api.dmUnreadCount()
+        if (!cancel) setCount(count)
+      } catch {
+        /* network blip; will reconcile on the next stream event or slow poll */
+      }
+    }
+    refresh()
+    // Slow background reconcile in case the SSE stream silently stalls.
+    const iv = setInterval(refresh, 120_000)
+    // Nudge the count whenever the stream surfaces a message or read event — that covers both
+    // "new message arrived" (increment) and "I read somewhere else" (decrement) without needing
+    // to compute deltas locally.
+    const unsubscribe = subscribeToDmStream(() => {
+      refresh()
+    })
+    return () => {
+      cancel = true
+      clearInterval(iv)
+      unsubscribe()
+    }
+  }, [enabled])
+  return count
 }

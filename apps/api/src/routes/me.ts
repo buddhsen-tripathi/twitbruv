@@ -8,6 +8,8 @@ import { toPostDto } from '../lib/post-dto.ts'
 import { loadViewerFlags } from '../lib/viewer-flags.ts'
 import { loadPostMedia } from '../lib/post-media.ts'
 import { loadArticleCards } from '../lib/article-cards.ts'
+import { loadRepostTargets } from '../lib/repost-targets.ts'
+import { loadQuoteTargets } from '../lib/quote-targets.ts'
 
 export const meRoute = new Hono<HonoEnv>()
 
@@ -95,10 +97,22 @@ meRoute.get('/bookmarks', async (c) => {
     .limit(limit)
 
   const ids = rows.map((r) => r.post.id)
-  const [flags, mediaMap, articleMap] = await Promise.all([
+  const [flags, mediaMap, articleMap, repostMap, quoteMap] = await Promise.all([
     loadViewerFlags(db, session.user.id, ids),
     loadPostMedia(db, ids),
     loadArticleCards(db, ids),
+    loadRepostTargets({
+      db,
+      viewerId: session.user.id,
+      env: mediaEnv,
+      repostRows: rows.map((r) => ({ id: r.post.id, repostOfId: r.post.repostOfId })),
+    }),
+    loadQuoteTargets({
+      db,
+      viewerId: session.user.id,
+      env: mediaEnv,
+      quoteRows: rows.map((r) => ({ id: r.post.id, quoteOfId: r.post.quoteOfId })),
+    }),
   ])
   const posts = rows.map((r) =>
     toPostDto(
@@ -108,6 +122,8 @@ meRoute.get('/bookmarks', async (c) => {
       mediaMap.get(r.post.id),
       mediaEnv,
       articleMap.get(r.post.id),
+      repostMap.get(r.post.id),
+      quoteMap.get(r.post.id),
     ),
   )
   const nextCursor = rows.length === limit ? rows[rows.length - 1]!.bookmarkedAt.toISOString() : null

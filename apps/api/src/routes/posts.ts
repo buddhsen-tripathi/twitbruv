@@ -7,7 +7,11 @@ import { toPostDto } from '../lib/post-dto.ts'
 import { loadViewerFlags } from '../lib/viewer-flags.ts'
 import { loadPostMedia } from '../lib/post-media.ts'
 import { loadArticleCards } from '../lib/article-cards.ts'
+import { loadRepostTargets } from '../lib/repost-targets.ts'
+import { loadQuoteTargets } from '../lib/quote-targets.ts'
 import { linkHashtags } from '../lib/hashtags.ts'
+import { linkMentions } from '../lib/mentions.ts'
+import { notify } from '../lib/notify.ts'
 import { homeFeedCacheKey } from './feed.ts'
 
 export const postsRoute = new Hono<HonoEnv>()
@@ -17,8 +21,9 @@ const EDIT_WINDOW_MS = 5 * 60 * 1000
 // Create a post (top-level, reply, or quote).
 postsRoute.post('/', requireAuth(), async (c) => {
   const session = c.get('session')!
-  const { db, cache } = c.get('ctx')
+  const { db, cache, rateLimit } = c.get('ctx')
   const body = createPostSchema.parse(await c.req.json())
+  await rateLimit(c, body.replyToId ? 'posts.reply' : 'posts.create')
 
   if (body.replyToId && body.quoteOfId) {
     return c.json({ error: 'invalid_combo', message: 'reply and quote are mutually exclusive' }, 400)
@@ -28,6 +33,8 @@ postsRoute.post('/', requireAuth(), async (c) => {
     let replyToId: string | null = null
     let rootId: string | null = null
     let depth = 0
+    let replyTargetAuthorId: string | null = null
+    let quoteTargetAuthorId: string | null = null
 
     if (body.replyToId) {
       const [parent] = await tx
@@ -40,6 +47,7 @@ postsRoute.post('/', requireAuth(), async (c) => {
       replyToId = parent.id
       rootId = parent.rootId ?? parent.id
       depth = parent.conversationDepth + 1
+      replyTargetAuthorId = parent.authorId
 
       await tx
         .update(schema.posts)
@@ -50,12 +58,13 @@ postsRoute.post('/', requireAuth(), async (c) => {
     let quoteOfId: string | null = null
     if (body.quoteOfId) {
       const [target] = await tx
-        .select({ id: schema.posts.id })
+        .select({ id: schema.posts.id, authorId: schema.posts.authorId })
         .from(schema.posts)
         .where(and(eq(schema.posts.id, body.quoteOfId), isNull(schema.posts.deletedAt)))
         .limit(1)
       if (!target) throw new HttpError(404, 'quote_target_not_found')
       quoteOfId = target.id
+      quoteTargetAuthorId = target.authorId
       await tx
         .update(schema.posts)
         .set({ quoteCount: sql`${schema.posts.quoteCount} + 1` })
@@ -104,6 +113,43 @@ postsRoute.post('/', requireAuth(), async (c) => {
     }
 
     await linkHashtags(tx, post.id, post.text)
+    const mentionedUserIds = await linkMentions(tx, post.id, session.user.id, post.text)
+
+    // Fan-out notifications. Self-notifications and duplicates (mention of the reply target,
+    // for instance) are filtered inside notify() + de-duped here to avoid double rows.
+    const notifiedForStructure = new Set<string>()
+    const toNotify: Array<Parameters<typeof notify>[1][number]> = []
+    if (replyTargetAuthorId && replyTargetAuthorId !== session.user.id) {
+      toNotify.push({
+        userId: replyTargetAuthorId,
+        actorId: session.user.id,
+        kind: 'reply',
+        entityType: 'post',
+        entityId: post.id,
+      })
+      notifiedForStructure.add(replyTargetAuthorId)
+    }
+    if (quoteTargetAuthorId && quoteTargetAuthorId !== session.user.id) {
+      toNotify.push({
+        userId: quoteTargetAuthorId,
+        actorId: session.user.id,
+        kind: 'quote',
+        entityType: 'post',
+        entityId: post.id,
+      })
+      notifiedForStructure.add(quoteTargetAuthorId)
+    }
+    for (const uid of mentionedUserIds) {
+      if (notifiedForStructure.has(uid)) continue
+      toNotify.push({
+        userId: uid,
+        actorId: session.user.id,
+        kind: 'mention',
+        entityType: 'post',
+        entityId: post.id,
+      })
+    }
+    await notify(tx, toNotify)
 
     const [author] = await tx.select().from(schema.users).where(eq(schema.users.id, post.authorId)).limit(1)
     if (!author) throw new HttpError(500, 'author_missing')
@@ -114,9 +160,22 @@ postsRoute.post('/', requireAuth(), async (c) => {
   // Invalidate the author's cached home feed so their own new post shows up on refresh.
   await cache.del(homeFeedCacheKey(session.user.id))
 
-  const [mediaMap, articleMap] = await Promise.all([
+  const env = c.get('ctx').mediaEnv
+  const [mediaMap, articleMap, repostMap, quoteMap] = await Promise.all([
     loadPostMedia(db, [result.post.id]),
     loadArticleCards(db, [result.post.id]),
+    loadRepostTargets({
+      db,
+      viewerId: session.user.id,
+      env,
+      repostRows: [{ id: result.post.id, repostOfId: result.post.repostOfId }],
+    }),
+    loadQuoteTargets({
+      db,
+      viewerId: session.user.id,
+      env,
+      quoteRows: [{ id: result.post.id, quoteOfId: result.post.quoteOfId }],
+    }),
   ])
   return c.json(
     {
@@ -125,8 +184,10 @@ postsRoute.post('/', requireAuth(), async (c) => {
         result.author,
         { liked: false, bookmarked: false, reposted: false },
         mediaMap.get(result.post.id),
-        c.get('ctx').mediaEnv,
+        env,
         articleMap.get(result.post.id),
+        repostMap.get(result.post.id),
+        quoteMap.get(result.post.id),
       ),
     },
     201,
@@ -136,8 +197,9 @@ postsRoute.post('/', requireAuth(), async (c) => {
 // Repost (creates a posts row with repostOfId set, empty text).
 postsRoute.post('/:id/repost', requireAuth(), async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
   const id = c.req.param('id')
+  await rateLimit(c, 'posts.repost')
 
   await db.transaction(async (tx) => {
     const [target] = await tx
@@ -170,6 +232,16 @@ postsRoute.post('/:id/repost', requireAuth(), async (c) => {
       .update(schema.posts)
       .set({ repostCount: sql`${schema.posts.repostCount} + 1` })
       .where(eq(schema.posts.id, target.id))
+
+    await notify(tx, [
+      {
+        userId: target.authorId,
+        actorId: session.user.id,
+        kind: 'repost',
+        entityType: 'post',
+        entityId: target.id,
+      },
+    ])
   })
 
   return c.json({ ok: true })
@@ -206,8 +278,9 @@ postsRoute.delete('/:id/repost', requireAuth(), async (c) => {
 // Like / unlike.
 postsRoute.post('/:id/like', requireAuth(), async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
   const id = c.req.param('id')
+  await rateLimit(c, 'posts.like')
 
   await db.transaction(async (tx) => {
     const inserted = await tx
@@ -220,6 +293,23 @@ postsRoute.post('/:id/like', requireAuth(), async (c) => {
         .update(schema.posts)
         .set({ likeCount: sql`${schema.posts.likeCount} + 1` })
         .where(eq(schema.posts.id, id))
+
+      const [target] = await tx
+        .select({ authorId: schema.posts.authorId })
+        .from(schema.posts)
+        .where(eq(schema.posts.id, id))
+        .limit(1)
+      if (target) {
+        await notify(tx, [
+          {
+            userId: target.authorId,
+            actorId: session.user.id,
+            kind: 'like',
+            entityType: 'post',
+            entityId: id,
+          },
+        ])
+      }
     }
   })
 
@@ -250,8 +340,9 @@ postsRoute.delete('/:id/like', requireAuth(), async (c) => {
 // Bookmark / unbookmark.
 postsRoute.post('/:id/bookmark', requireAuth(), async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
   const id = c.req.param('id')
+  await rateLimit(c, 'posts.bookmark')
 
   await db.transaction(async (tx) => {
     const inserted = await tx
@@ -342,12 +433,24 @@ postsRoute.get('/:id/thread', async (c) => {
     .limit(100)
 
   const allIds = [...ancestorRows.map((r) => r.post.id), target.id, ...replies.map((r) => r.post.id)]
-  const [flags, mediaMap, articleMap] = await Promise.all([
+  const env = c.get('ctx').mediaEnv
+  const allRepostRows = [
+    ...ancestorRows.map((r) => ({ id: r.post.id, repostOfId: r.post.repostOfId })),
+    { id: target.id, repostOfId: target.repostOfId },
+    ...replies.map((r) => ({ id: r.post.id, repostOfId: r.post.repostOfId })),
+  ]
+  const allQuoteRows = [
+    ...ancestorRows.map((r) => ({ id: r.post.id, quoteOfId: r.post.quoteOfId })),
+    { id: target.id, quoteOfId: target.quoteOfId },
+    ...replies.map((r) => ({ id: r.post.id, quoteOfId: r.post.quoteOfId })),
+  ]
+  const [flags, mediaMap, articleMap, repostMap, quoteMap] = await Promise.all([
     loadViewerFlags(db, viewerId, allIds),
     loadPostMedia(db, allIds),
     loadArticleCards(db, allIds),
+    loadRepostTargets({ db, viewerId, env, repostRows: allRepostRows }),
+    loadQuoteTargets({ db, viewerId, env, quoteRows: allQuoteRows }),
   ])
-  const env = c.get('ctx').mediaEnv
 
   const byId = new Map(ancestorRows.map((r) => [r.post.id, r]))
   const orderedAncestors = ancestorIds.map((i) => byId.get(i)!).filter(Boolean)
@@ -361,6 +464,8 @@ postsRoute.get('/:id/thread', async (c) => {
         mediaMap.get(r.post.id),
         env,
         articleMap.get(r.post.id),
+        repostMap.get(r.post.id),
+        quoteMap.get(r.post.id),
       ),
     ),
     post: targetWithAuthor
@@ -371,6 +476,8 @@ postsRoute.get('/:id/thread', async (c) => {
           mediaMap.get(target.id),
           env,
           articleMap.get(target.id),
+          repostMap.get(target.id),
+          quoteMap.get(target.id),
         )
       : null,
     replies: replies.map((r) =>
@@ -381,6 +488,8 @@ postsRoute.get('/:id/thread', async (c) => {
         mediaMap.get(r.post.id),
         env,
         articleMap.get(r.post.id),
+        repostMap.get(r.post.id),
+        quoteMap.get(r.post.id),
       ),
     ),
   })
@@ -399,10 +508,22 @@ postsRoute.get('/:id', async (c) => {
     .limit(1)
   const row = rows[0]
   if (!row) return c.json({ error: 'not_found' }, 404)
-  const [flags, mediaMap, articleMap] = await Promise.all([
+  const [flags, mediaMap, articleMap, repostMap, quoteMap] = await Promise.all([
     loadViewerFlags(db, viewerId, [row.post.id]),
     loadPostMedia(db, [row.post.id]),
     loadArticleCards(db, [row.post.id]),
+    loadRepostTargets({
+      db,
+      viewerId,
+      env: mediaEnv,
+      repostRows: [{ id: row.post.id, repostOfId: row.post.repostOfId }],
+    }),
+    loadQuoteTargets({
+      db,
+      viewerId,
+      env: mediaEnv,
+      quoteRows: [{ id: row.post.id, quoteOfId: row.post.quoteOfId }],
+    }),
   ])
   return c.json({
     post: toPostDto(
@@ -412,6 +533,8 @@ postsRoute.get('/:id', async (c) => {
       mediaMap.get(row.post.id),
       mediaEnv,
       articleMap.get(row.post.id),
+      repostMap.get(row.post.id),
+      quoteMap.get(row.post.id),
     ),
   })
 })
@@ -446,10 +569,23 @@ postsRoute.patch('/:id', requireAuth(), async (c) => {
   })
 
   const [author] = await db.select().from(schema.users).where(eq(schema.users.id, result.post.authorId)).limit(1)
-  const [flags, mediaMap, articleMap] = await Promise.all([
+  const env = c.get('ctx').mediaEnv
+  const [flags, mediaMap, articleMap, repostMap, quoteMap] = await Promise.all([
     loadViewerFlags(db, session.user.id, [result.post.id]),
     loadPostMedia(db, [result.post.id]),
     loadArticleCards(db, [result.post.id]),
+    loadRepostTargets({
+      db,
+      viewerId: session.user.id,
+      env,
+      repostRows: [{ id: result.post.id, repostOfId: result.post.repostOfId }],
+    }),
+    loadQuoteTargets({
+      db,
+      viewerId: session.user.id,
+      env,
+      quoteRows: [{ id: result.post.id, quoteOfId: result.post.quoteOfId }],
+    }),
   ])
   return c.json({
     post: toPostDto(
@@ -457,8 +593,10 @@ postsRoute.patch('/:id', requireAuth(), async (c) => {
       author!,
       flags.get(result.post.id),
       mediaMap.get(result.post.id),
-      c.get('ctx').mediaEnv,
+      env,
       articleMap.get(result.post.id),
+      repostMap.get(result.post.id),
+      quoteMap.get(result.post.id),
     ),
   })
 })
@@ -522,10 +660,22 @@ postsRoute.get('/', async (c) => {
     .limit(limit)
 
   const ids = rows.map((r) => r.post.id)
-  const [flags, mediaMap, articleMap] = await Promise.all([
+  const [flags, mediaMap, articleMap, repostMap, quoteMap] = await Promise.all([
     loadViewerFlags(db, viewerId, ids),
     loadPostMedia(db, ids),
     loadArticleCards(db, ids),
+    loadRepostTargets({
+      db,
+      viewerId,
+      env: mediaEnv,
+      repostRows: rows.map((r) => ({ id: r.post.id, repostOfId: r.post.repostOfId })),
+    }),
+    loadQuoteTargets({
+      db,
+      viewerId,
+      env: mediaEnv,
+      quoteRows: rows.map((r) => ({ id: r.post.id, quoteOfId: r.post.quoteOfId })),
+    }),
   ])
   const posts = rows.map((r) =>
     toPostDto(
@@ -535,6 +685,8 @@ postsRoute.get('/', async (c) => {
       mediaMap.get(r.post.id),
       mediaEnv,
       articleMap.get(r.post.id),
+      repostMap.get(r.post.id),
+      quoteMap.get(r.post.id),
     ),
   )
   const nextCursor = posts.length === limit ? posts[posts.length - 1]!.createdAt : null

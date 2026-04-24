@@ -61,6 +61,12 @@ export interface PostDto {
   media?: Array<MediaDto>
   articleCard?: ArticleCard
   viewer?: ViewerFlags
+  /** Populated on reposts (rows where repostOfId is set). The UI renders this instead of the
+   *  empty-text repost row, with a "reposted by" banner above. */
+  repostOf?: PostDto
+  /** Populated on quotes (rows where quoteOfId is set) — the embedded post rendered under the
+   *  quoter's commentary. Not recursive: the embed's own quoteOf/repostOf stay undefined. */
+  quoteOf?: PostDto
 }
 
 export function toMediaDto(m: MediaRow, env: MediaEnv): MediaDto {
@@ -93,6 +99,8 @@ export function toPostDto(
   media?: Array<MediaRow>,
   env?: MediaEnv,
   articleCard?: ArticleCard,
+  repostOf?: PostDto,
+  quoteOf?: PostDto,
 ): PostDto {
   return {
     id: post.id,
@@ -124,5 +132,7 @@ export function toPostDto(
     ...(viewer ? { viewer } : {}),
     ...(media && env ? { media: media.map((m) => toMediaDto(m, env)) } : {}),
     ...(articleCard ? { articleCard } : {}),
+    ...(repostOf ? { repostOf } : {}),
+    ...(quoteOf ? { quoteOf } : {}),
   }
 }

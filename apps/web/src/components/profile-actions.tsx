@@ -1,7 +1,9 @@
 import { useState } from "react"
+import { useRouter } from "@tanstack/react-router"
 import {
   IconBan,
   IconDots,
+  IconMail,
   IconVolumeOff,
 } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
@@ -20,11 +22,23 @@ export function ProfileActions({
   profile: PublicProfile
   onChange: (next: PublicProfile) => void
 }) {
-  const [busy, setBusy] = useState<null | "follow" | "block" | "mute">(null)
+  const router = useRouter()
+  const [busy, setBusy] = useState<null | "follow" | "block" | "mute" | "message">(null)
 
   if (!profile.viewer || !profile.handle) return null
   const h = profile.handle
   const v = profile.viewer
+
+  async function startConversation() {
+    if (busy) return
+    setBusy("message")
+    try {
+      const { id } = await api.dmStart(profile.id)
+      router.navigate({ to: "/inbox/$conversationId", params: { conversationId: id } })
+    } catch {
+      setBusy(null)
+    }
+  }
 
   async function run<K extends "follow" | "block" | "mute">(
     key: K,
@@ -55,6 +69,15 @@ export function ProfileActions({
 
   return (
     <div className="flex items-center gap-2">
+      <Button
+        size="sm"
+        variant="outline"
+        aria-label="message"
+        disabled={busy !== null || v.blocking}
+        onClick={startConversation}
+      >
+        <IconMail size={16} stroke={1.75} />
+      </Button>
       <Button
         size="sm"
         variant={v.following ? "outline" : "default"}

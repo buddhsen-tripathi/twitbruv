@@ -72,9 +72,7 @@ export function Feed({
     return <div className="px-4 py-6 text-sm text-destructive">{error}</div>
   if (posts.length === 0)
     return (
-      <div className="px-4 py-6 text-sm text-muted-foreground">
-        {emptyMessage}
-      </div>
+      <div className="p-4 text-sm text-muted-foreground">{emptyMessage}</div>
     )
 
   return (
