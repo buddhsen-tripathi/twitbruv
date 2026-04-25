@@ -92,6 +92,15 @@ export const api = {
     request<{ users: Array<PublicUser>; posts: Array<Post> }>(
       `/api/search?q=${encodeURIComponent(q)}`
     ),
+  savedSearches: () =>
+    request<{ items: Array<SavedSearch> }>("/api/search/saved"),
+  saveSearch: (query: string) =>
+    request<{ item: SavedSearch }>("/api/search/saved", {
+      method: "POST",
+      body: JSON.stringify({ query }),
+    }),
+  deleteSavedSearch: (id: string) =>
+    request<{ ok: true }>(`/api/search/saved/${id}`, { method: "DELETE" }),
   bookmarks: (cursor?: string) =>
     request<FeedPage>(`/api/me/bookmarks${qs(cursor)}`),
   blocks: (cursor?: string) =>
@@ -685,6 +694,20 @@ export interface BlockedUser {
   blockedAt: string
 }
 
+export interface ThreadReply extends Post {
+  /** Number of direct (non-deleted) replies to this reply. The thread route only ships
+   *  the first hop of replies; if this is non-zero, the UI shows a
+   *  "View N more replies" affordance that opens the reply's own thread page.
+   */
+  descendantReplyCount: number
+}
+
+export interface Thread {
+  ancestors: Array<Post>
+  post: Post | null
+  replies: Array<ThreadReply>
+}
+
 export interface MutedUser {
   id: string
   handle: string | null
@@ -716,11 +739,10 @@ export interface SelfUser {
   createdAt: string
 }
 
-export interface ThreadReply extends Post {
-  /** Number of direct (non-deleted) replies to this reply. The thread route only ships
-   *  the first hop of replies; if this is non-zero, the UI shows a
-   *  "View N more replies" affordance that opens the reply's own thread page. */
-  descendantReplyCount: number
+export interface SavedSearch {
+  id: string
+  query: string
+  createdAt?: string
 }
 
 export interface Thread {
