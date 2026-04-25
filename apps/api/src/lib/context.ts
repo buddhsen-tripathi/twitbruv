@@ -68,11 +68,10 @@ export async function buildContext(): Promise<AppContext> {
   }
   const s3 = createS3(mediaEnv)
 
-  // Dev-only: ensure the bucket exists and allows CORS from the web origin. Safe no-op on prod
-  // against a pre-provisioned R2 bucket (it will overwrite the CORS policy, so do this only in dev).
-  if (env.NODE_ENV !== 'production') {
-    await ensureBucket({ s3, bucket: mediaEnv.S3_BUCKET, allowedOrigins: env.AUTH_TRUSTED_ORIGINS })
-  }
+  // Run on every boot (idempotent): creates the bucket if missing, sets a public-read policy
+  // for object GETs, and applies CORS so the browser can upload directly. If you ever migrate
+  // to a managed bucket with externally-managed CORS/policy, gate this back to dev.
+  await ensureBucket({ s3, bucket: mediaEnv.S3_BUCKET, allowedOrigins: env.AUTH_TRUSTED_ORIGINS })
 
   const boss = new PgBoss({ connectionString: env.DATABASE_URL })
   boss.on('error', (err) => console.error('pg-boss:', err))
