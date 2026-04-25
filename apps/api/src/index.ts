@@ -56,10 +56,12 @@ app.route('/api/media', createMediaRoute({ s3: ctx.s3, mediaEnv: ctx.mediaEnv, b
 // thrash signing. The signed URL itself stays valid past the cache so refreshes hit the same
 // underlying object cheaply.
 app.get('/api/m/*', async (c) => {
-  // c.req.path is the normalized request path; split-after the route prefix to recover the key
-  // robustly across runtimes (some Bun/Hono versions hand back unexpected `c.req.url` shapes).
-  const after = c.req.path.split('/api/m/')[1] ?? ''
-  const key = decodeURIComponent(after)
+  // Recover the object key by stripping every leading occurrence of the route prefix. Belt
+  // and suspenders for any path-doubling that happens upstream (proxies, custom domains).
+  let key = c.req.path
+  while (key.startsWith('/')) key = key.slice(1)
+  while (key.startsWith('api/m/')) key = key.slice('api/m/'.length)
+  key = decodeURIComponent(key)
   if (!key) return c.json({ error: 'missing_key' }, 400)
   if (key.includes('..')) return c.json({ error: 'bad_key' }, 400)
 
@@ -69,7 +71,13 @@ app.get('/api/m/*', async (c) => {
     key,
     expiresInSeconds: 60 * 60,
   })
-  c.header('Cache-Control', 'public, max-age=300')
+  // secureHeaders() defaults to `Cross-Origin-Resource-Policy: same-origin`, which makes the
+  // browser refuse to load the redirect from a different origin (`<img>` on the web app).
+  // Override here — this endpoint is intentionally cross-origin.
+  c.header('Cross-Origin-Resource-Policy', 'cross-origin')
+  // Signing is microseconds; keep the redirect cache short so a bad deploy doesn't poison
+  // browser caches for ages, but long enough to skip re-signing during a single page paint.
+  c.header('Cache-Control', 'public, max-age=30')
   return c.redirect(signed, 302)
 })
 app.route('/api/articles', articlesRoute)
