@@ -374,7 +374,8 @@ dmsRoute.post('/', async (c) => {
 // special; from their side the convo was always accepted.
 dmsRoute.post('/:id/accept', async (c) => {
   const session = c.get('session')!
-  const { db, pubsub, cache } = c.get('ctx')
+  const { db, pubsub, cache, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'dms.respond')
   const me = session.user.id
   const conversationId = c.req.param('id')
 
@@ -404,7 +405,8 @@ dmsRoute.post('/:id/accept', async (c) => {
 // gets a follow-from / accepts) but the receiver won't see further messages.
 dmsRoute.post('/:id/decline', async (c) => {
   const session = c.get('session')!
-  const { db, pubsub, cache } = c.get('ctx')
+  const { db, pubsub, cache, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'dms.respond')
   const me = session.user.id
   const conversationId = c.req.param('id')
 
@@ -434,7 +436,8 @@ const addMembersSchema = z.object({
 
 dmsRoute.post('/:id/members', async (c) => {
   const session = c.get('session')!
-  const { db, pubsub } = c.get('ctx')
+  const { db, pubsub, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'dms.members')
   const me = session.user.id
   const conversationId = c.req.param('id')
   const body = addMembersSchema.parse(await c.req.json())
@@ -492,7 +495,8 @@ dmsRoute.post('/:id/members', async (c) => {
 
 dmsRoute.delete('/:id/members/:userId', async (c) => {
   const session = c.get('session')!
-  const { db, pubsub } = c.get('ctx')
+  const { db, pubsub, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'dms.members')
   const me = session.user.id
   const conversationId = c.req.param('id')
   const target = c.req.param('userId')
@@ -565,7 +569,8 @@ const createInviteSchema = z.object({
 
 dmsRoute.post('/:id/invites', async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'dms.invites')
   const me = session.user.id
   const conversationId = c.req.param('id')
   const body = createInviteSchema.parse(await c.req.json().catch(() => ({})))
@@ -612,7 +617,8 @@ dmsRoute.get('/:id/invites', async (c) => {
 
 dmsRoute.delete('/:id/invites/:inviteId', async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'dms.invites')
   const me = session.user.id
   const conversationId = c.req.param('id')
   const inviteId = c.req.param('inviteId')
@@ -930,7 +936,8 @@ const MESSAGE_EDIT_WINDOW_MS = 15 * 60 * 1000
 // update in place without a refetch.
 dmsRoute.patch('/:id/messages/:msgId', async (c) => {
   const session = c.get('session')!
-  const { db, pubsub } = c.get('ctx')
+  const { db, pubsub, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'dms.message-mutate')
   const me = session.user.id
   const conversationId = c.req.param('id')
   const msgId = c.req.param('msgId')
@@ -974,7 +981,8 @@ dmsRoute.patch('/:id/messages/:msgId', async (c) => {
 // "deleted message" placeholder via the SSE event.
 dmsRoute.delete('/:id/messages/:msgId', async (c) => {
   const session = c.get('session')!
-  const { db, pubsub } = c.get('ctx')
+  const { db, pubsub, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'dms.message-mutate')
   const me = session.user.id
   const conversationId = c.req.param('id')
   const msgId = c.req.param('msgId')

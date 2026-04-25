@@ -97,13 +97,26 @@ function errMsg(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
 }
 
-// Mount better-auth (handles /api/auth/*). Apply IP-based rate limits on the most-abused
-// flows (signup + signin) before delegating to better-auth — it doesn't enforce any.
+// Mount better-auth (handles /api/auth/*). Apply rate limits on the abusable flows before
+// delegating to better-auth — it doesn't enforce any.
 app.on(['POST', 'GET'], '/api/auth/*', async (c) => {
+  const path = c.req.path
   if (c.req.method === 'POST') {
-    if (c.req.path.endsWith('/sign-up/email')) await ctx.rateLimit(c, 'auth.signup')
-    else if (c.req.path.endsWith('/sign-in/email')) await ctx.rateLimit(c, 'auth.signin')
+    if (path.endsWith('/sign-up/email')) await ctx.rateLimit(c, 'auth.signup')
+    else if (path.endsWith('/sign-in/email')) await ctx.rateLimit(c, 'auth.signin')
+    else if (path.endsWith('/sign-in/magic-link')) await ctx.rateLimit(c, 'auth.magic-link')
+    else if (path.endsWith('/verify-password')) await ctx.rateLimit(c, 'auth.signin')
+    else if (path.endsWith('/change-password')) await ctx.rateLimit(c, 'auth.signin')
+    else if (path.endsWith('/request-password-reset')) await ctx.rateLimit(c, 'auth.password-reset')
+    else if (path.includes('/reset-password')) await ctx.rateLimit(c, 'auth.password-reset')
+    else if (path.endsWith('/two-factor/verify-totp')) await ctx.rateLimit(c, 'auth.2fa-verify')
+    else if (path.endsWith('/two-factor/verify-backup-code')) await ctx.rateLimit(c, 'auth.2fa-verify')
+    else if (path.endsWith('/two-factor/verify-otp')) await ctx.rateLimit(c, 'auth.2fa-verify')
+    else if (path.endsWith('/two-factor/send-otp')) await ctx.rateLimit(c, 'auth.email-verify-resend')
+    else if (path.endsWith('/send-verification-email')) await ctx.rateLimit(c, 'auth.email-verify-resend')
+    else if (path.endsWith('/change-email')) await ctx.rateLimit(c, 'auth.email-verify-resend')
   }
+  if (path.includes('/callback/')) await ctx.rateLimit(c, 'auth.oauth-callback')
   return ctx.auth.handler(c.req.raw)
 })
 

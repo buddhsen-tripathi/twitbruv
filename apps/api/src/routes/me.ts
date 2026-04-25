@@ -28,7 +28,8 @@ meRoute.get('/', async (c) => {
 
 meRoute.patch('/', async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'me.update')
   const raw = await c.req.json()
   const body = updateProfileSchema.parse(raw)
 
@@ -61,7 +62,8 @@ meRoute.patch('/', async (c) => {
 
 meRoute.post('/handle', async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'me.handle-claim')
   const { handle } = claimHandleSchema.parse(await c.req.json())
   if (isReservedHandle(handle)) return c.json({ error: 'reserved_handle' }, 400)
 

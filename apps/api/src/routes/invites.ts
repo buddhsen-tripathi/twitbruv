@@ -60,7 +60,8 @@ invitesRoute.get('/:token', async (c) => {
 invitesRoute.post('/:token/accept', requireAuth(), async (c) => {
   const session = c.get('session')!
   const me = session.user.id
-  const { db, pubsub } = c.get('ctx')
+  const { db, pubsub, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'invites.accept')
   const token = c.req.param('token')
 
   const invite = await loadInvite(db, token)
