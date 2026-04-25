@@ -9,10 +9,13 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as SearchRouteImport } from './routes/search'
+import { Route as OgRouteImport } from './routes/og'
 import { Route as NotificationsRouteImport } from './routes/notifications'
+import { Route as ManifestDotjsonRouteImport } from './routes/manifest[.]json'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as DraftsRouteImport } from './routes/drafts'
@@ -35,10 +38,18 @@ import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminReportsRouteImport } from './routes/admin.reports'
 import { Route as HandleFollowingRouteImport } from './routes/$handle.following'
 import { Route as HandleFollowersRouteImport } from './routes/$handle.followers'
+import { Route as OgUserHandleRouteImport } from './routes/og.user.$handle'
+import { Route as OgPostIdRouteImport } from './routes/og.post.$id'
 import { Route as ArticlesIdEditRouteImport } from './routes/articles.$id.edit'
 import { Route as HandlePIdRouteImport } from './routes/$handle.p.$id'
 import { Route as HandleASlugRouteImport } from './routes/$handle.a.$slug'
+import { Route as OgArticleHandleSlugRouteImport } from './routes/og.article.$handle.$slug'
 
+const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
+  id: '/sitemap.xml',
+  path: '/sitemap.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SignupRoute = SignupRouteImport.update({
   id: '/signup',
   path: '/signup',
@@ -54,9 +65,19 @@ const SearchRoute = SearchRouteImport.update({
   path: '/search',
   getParentRoute: () => rootRouteImport,
 } as any)
+const OgRoute = OgRouteImport.update({
+  id: '/og',
+  path: '/og',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const NotificationsRoute = NotificationsRouteImport.update({
   id: '/notifications',
   path: '/notifications',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ManifestDotjsonRoute = ManifestDotjsonRouteImport.update({
+  id: '/manifest.json',
+  path: '/manifest.json',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -169,6 +190,16 @@ const HandleFollowersRoute = HandleFollowersRouteImport.update({
   path: '/followers',
   getParentRoute: () => HandleRoute,
 } as any)
+const OgUserHandleRoute = OgUserHandleRouteImport.update({
+  id: '/user/$handle',
+  path: '/user/$handle',
+  getParentRoute: () => OgRoute,
+} as any)
+const OgPostIdRoute = OgPostIdRouteImport.update({
+  id: '/post/$id',
+  path: '/post/$id',
+  getParentRoute: () => OgRoute,
+} as any)
 const ArticlesIdEditRoute = ArticlesIdEditRouteImport.update({
   id: '/articles/$id/edit',
   path: '/articles/$id/edit',
@@ -184,6 +215,11 @@ const HandleASlugRoute = HandleASlugRouteImport.update({
   path: '/a/$slug',
   getParentRoute: () => HandleRoute,
 } as any)
+const OgArticleHandleSlugRoute = OgArticleHandleSlugRouteImport.update({
+  id: '/article/$handle/$slug',
+  path: '/article/$handle/$slug',
+  getParentRoute: () => OgRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -194,10 +230,13 @@ export interface FileRoutesByFullPath {
   '/drafts': typeof DraftsRoute
   '/inbox': typeof InboxRouteWithChildren
   '/login': typeof LoginRoute
+  '/manifest.json': typeof ManifestDotjsonRoute
   '/notifications': typeof NotificationsRoute
+  '/og': typeof OgRouteWithChildren
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/$handle/followers': typeof HandleFollowersRoute
   '/$handle/following': typeof HandleFollowingRoute
   '/admin/reports': typeof AdminReportsRoute
@@ -215,6 +254,9 @@ export interface FileRoutesByFullPath {
   '/$handle/a/$slug': typeof HandleASlugRoute
   '/$handle/p/$id': typeof HandlePIdRoute
   '/articles/$id/edit': typeof ArticlesIdEditRoute
+  '/og/post/$id': typeof OgPostIdRoute
+  '/og/user/$handle': typeof OgUserHandleRoute
+  '/og/article/$handle/$slug': typeof OgArticleHandleSlugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -222,10 +264,13 @@ export interface FileRoutesByTo {
   '/bookmarks': typeof BookmarksRoute
   '/drafts': typeof DraftsRoute
   '/login': typeof LoginRoute
+  '/manifest.json': typeof ManifestDotjsonRoute
   '/notifications': typeof NotificationsRoute
+  '/og': typeof OgRouteWithChildren
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/$handle/followers': typeof HandleFollowersRoute
   '/$handle/following': typeof HandleFollowingRoute
   '/admin/reports': typeof AdminReportsRoute
@@ -243,6 +288,9 @@ export interface FileRoutesByTo {
   '/$handle/a/$slug': typeof HandleASlugRoute
   '/$handle/p/$id': typeof HandlePIdRoute
   '/articles/$id/edit': typeof ArticlesIdEditRoute
+  '/og/post/$id': typeof OgPostIdRoute
+  '/og/user/$handle': typeof OgUserHandleRoute
+  '/og/article/$handle/$slug': typeof OgArticleHandleSlugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -254,10 +302,13 @@ export interface FileRoutesById {
   '/drafts': typeof DraftsRoute
   '/inbox': typeof InboxRouteWithChildren
   '/login': typeof LoginRoute
+  '/manifest.json': typeof ManifestDotjsonRoute
   '/notifications': typeof NotificationsRoute
+  '/og': typeof OgRouteWithChildren
   '/search': typeof SearchRoute
   '/settings': typeof SettingsRoute
   '/signup': typeof SignupRoute
+  '/sitemap.xml': typeof SitemapDotxmlRoute
   '/$handle/followers': typeof HandleFollowersRoute
   '/$handle/following': typeof HandleFollowingRoute
   '/admin/reports': typeof AdminReportsRoute
@@ -275,6 +326,9 @@ export interface FileRoutesById {
   '/$handle/a/$slug': typeof HandleASlugRoute
   '/$handle/p/$id': typeof HandlePIdRoute
   '/articles/$id/edit': typeof ArticlesIdEditRoute
+  '/og/post/$id': typeof OgPostIdRoute
+  '/og/user/$handle': typeof OgUserHandleRoute
+  '/og/article/$handle/$slug': typeof OgArticleHandleSlugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -287,10 +341,13 @@ export interface FileRouteTypes {
     | '/drafts'
     | '/inbox'
     | '/login'
+    | '/manifest.json'
     | '/notifications'
+    | '/og'
     | '/search'
     | '/settings'
     | '/signup'
+    | '/sitemap.xml'
     | '/$handle/followers'
     | '/$handle/following'
     | '/admin/reports'
@@ -308,6 +365,9 @@ export interface FileRouteTypes {
     | '/$handle/a/$slug'
     | '/$handle/p/$id'
     | '/articles/$id/edit'
+    | '/og/post/$id'
+    | '/og/user/$handle'
+    | '/og/article/$handle/$slug'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -315,10 +375,13 @@ export interface FileRouteTypes {
     | '/bookmarks'
     | '/drafts'
     | '/login'
+    | '/manifest.json'
     | '/notifications'
+    | '/og'
     | '/search'
     | '/settings'
     | '/signup'
+    | '/sitemap.xml'
     | '/$handle/followers'
     | '/$handle/following'
     | '/admin/reports'
@@ -336,6 +399,9 @@ export interface FileRouteTypes {
     | '/$handle/a/$slug'
     | '/$handle/p/$id'
     | '/articles/$id/edit'
+    | '/og/post/$id'
+    | '/og/user/$handle'
+    | '/og/article/$handle/$slug'
   id:
     | '__root__'
     | '/'
@@ -346,10 +412,13 @@ export interface FileRouteTypes {
     | '/drafts'
     | '/inbox'
     | '/login'
+    | '/manifest.json'
     | '/notifications'
+    | '/og'
     | '/search'
     | '/settings'
     | '/signup'
+    | '/sitemap.xml'
     | '/$handle/followers'
     | '/$handle/following'
     | '/admin/reports'
@@ -367,6 +436,9 @@ export interface FileRouteTypes {
     | '/$handle/a/$slug'
     | '/$handle/p/$id'
     | '/articles/$id/edit'
+    | '/og/post/$id'
+    | '/og/user/$handle'
+    | '/og/article/$handle/$slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -378,10 +450,13 @@ export interface RootRouteChildren {
   DraftsRoute: typeof DraftsRoute
   InboxRoute: typeof InboxRouteWithChildren
   LoginRoute: typeof LoginRoute
+  ManifestDotjsonRoute: typeof ManifestDotjsonRoute
   NotificationsRoute: typeof NotificationsRoute
+  OgRoute: typeof OgRouteWithChildren
   SearchRoute: typeof SearchRoute
   SettingsRoute: typeof SettingsRoute
   SignupRoute: typeof SignupRoute
+  SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   ArticlesNewRoute: typeof ArticlesNewRoute
   HashtagTagRoute: typeof HashtagTagRoute
   InviteTokenRoute: typeof InviteTokenRoute
@@ -392,6 +467,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/sitemap.xml': {
+      id: '/sitemap.xml'
+      path: '/sitemap.xml'
+      fullPath: '/sitemap.xml'
+      preLoaderRoute: typeof SitemapDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/signup': {
       id: '/signup'
       path: '/signup'
@@ -413,11 +495,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SearchRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/og': {
+      id: '/og'
+      path: '/og'
+      fullPath: '/og'
+      preLoaderRoute: typeof OgRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/notifications': {
       id: '/notifications'
       path: '/notifications'
       fullPath: '/notifications'
       preLoaderRoute: typeof NotificationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/manifest.json': {
+      id: '/manifest.json'
+      path: '/manifest.json'
+      fullPath: '/manifest.json'
+      preLoaderRoute: typeof ManifestDotjsonRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -574,6 +670,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HandleFollowersRouteImport
       parentRoute: typeof HandleRoute
     }
+    '/og/user/$handle': {
+      id: '/og/user/$handle'
+      path: '/user/$handle'
+      fullPath: '/og/user/$handle'
+      preLoaderRoute: typeof OgUserHandleRouteImport
+      parentRoute: typeof OgRoute
+    }
+    '/og/post/$id': {
+      id: '/og/post/$id'
+      path: '/post/$id'
+      fullPath: '/og/post/$id'
+      preLoaderRoute: typeof OgPostIdRouteImport
+      parentRoute: typeof OgRoute
+    }
     '/articles/$id/edit': {
       id: '/articles/$id/edit'
       path: '/articles/$id/edit'
@@ -594,6 +704,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/$handle/a/$slug'
       preLoaderRoute: typeof HandleASlugRouteImport
       parentRoute: typeof HandleRoute
+    }
+    '/og/article/$handle/$slug': {
+      id: '/og/article/$handle/$slug'
+      path: '/article/$handle/$slug'
+      fullPath: '/og/article/$handle/$slug'
+      preLoaderRoute: typeof OgArticleHandleSlugRouteImport
+      parentRoute: typeof OgRoute
     }
   }
 }
@@ -645,6 +762,20 @@ const InboxRouteChildren: InboxRouteChildren = {
 
 const InboxRouteWithChildren = InboxRoute._addFileChildren(InboxRouteChildren)
 
+interface OgRouteChildren {
+  OgPostIdRoute: typeof OgPostIdRoute
+  OgUserHandleRoute: typeof OgUserHandleRoute
+  OgArticleHandleSlugRoute: typeof OgArticleHandleSlugRoute
+}
+
+const OgRouteChildren: OgRouteChildren = {
+  OgPostIdRoute: OgPostIdRoute,
+  OgUserHandleRoute: OgUserHandleRoute,
+  OgArticleHandleSlugRoute: OgArticleHandleSlugRoute,
+}
+
+const OgRouteWithChildren = OgRoute._addFileChildren(OgRouteChildren)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HandleRoute: HandleRouteWithChildren,
@@ -654,10 +785,13 @@ const rootRouteChildren: RootRouteChildren = {
   DraftsRoute: DraftsRoute,
   InboxRoute: InboxRouteWithChildren,
   LoginRoute: LoginRoute,
+  ManifestDotjsonRoute: ManifestDotjsonRoute,
   NotificationsRoute: NotificationsRoute,
+  OgRoute: OgRouteWithChildren,
   SearchRoute: SearchRoute,
   SettingsRoute: SettingsRoute,
   SignupRoute: SignupRoute,
+  SitemapDotxmlRoute: SitemapDotxmlRoute,
   ArticlesNewRoute: ArticlesNewRoute,
   HashtagTagRoute: HashtagTagRoute,
   InviteTokenRoute: InviteTokenRoute,
