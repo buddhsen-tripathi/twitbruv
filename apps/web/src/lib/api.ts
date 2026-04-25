@@ -356,6 +356,8 @@ export const api = {
       `/api/admin/reports${params.toString() ? `?${params.toString()}` : ""}`,
     )
   },
+  adminReportDetail: (id: string) =>
+    request<AdminReportDetail>(`/api/admin/reports/${id}`),
   adminResolveReport: (
     id: string,
     body: { status: "triaged" | "actioned" | "dismissed"; resolutionNote?: string },
@@ -841,6 +843,55 @@ export interface AdminReport {
   } | null
 }
 
+export type AdminReportSubject =
+  | {
+      type: "post"
+      post: {
+        id: string
+        text: string
+        sensitive: boolean
+        contentWarning: string | null
+        createdAt: string
+        deletedAt: string | null
+        author: {
+          id: string
+          handle: string | null
+          displayName: string | null
+          avatarUrl: string | null
+        } | null
+      }
+    }
+  | {
+      type: "user"
+      user: {
+        id: string
+        handle: string | null
+        displayName: string | null
+        avatarUrl: string | null
+        banned: boolean
+      }
+    }
+  | { type: "unknown"; subjectType: string; subjectId: string }
+
+export interface AdminReportDetail {
+  id: string
+  subjectType: string
+  subjectId: string
+  reason: string
+  details: string | null
+  status: ReportStatus
+  createdAt: string
+  resolvedAt: string | null
+  resolutionNote: string | null
+  reporter: {
+    id: string
+    handle: string | null
+    displayName: string | null
+    avatarUrl: string | null
+  } | null
+  subject: AdminReportSubject | null
+}
+
 export interface AnalyticsOverview {
   period: { days: number; since: string }
   totals: {
@@ -854,6 +905,14 @@ export interface AnalyticsOverview {
     newFollowers: number
     engagementRate: number
   }
+  snapshot: {
+    followerCount: number
+    followingCount: number
+    originalPosts: number
+    repostsAuthored: number
+    articlesPublished: number
+  }
   followerGrowth: Array<{ day: string; newFollowers: number }>
+  impressionsByDay: Array<{ day: string; count: number }>
   topPosts: Array<Post>
 }

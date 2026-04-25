@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { z } from 'zod'
-import { and, desc, eq, gte, inArray, isNull, sql } from '@workspace/db'
+import { and, desc, eq, gte, inArray, isNotNull, isNull, sql } from '@workspace/db'
 import { schema } from '@workspace/db'
 import { requireAuth, type HonoEnv } from '../middleware/session.ts'
 import { toPostDto } from '../lib/post-dto.ts'
@@ -68,8 +68,22 @@ analyticsRoute.get('/overview', requireAuth(), async (c) => {
 
   // Counts on my own posts over the window. Each aggregation runs against its own indexed
   // table; joins stay cheap because we scope by author first.
-  const [likes, reposts, replies, bookmarks, quotes, impressions, followerDelta, followsByDay] =
-    await Promise.all([
+  const [
+    likes,
+    reposts,
+    replies,
+    bookmarks,
+    quotes,
+    impressions,
+    followerDelta,
+    followsByDay,
+    followerTotal,
+    followingTotal,
+    originalPostsInPeriod,
+    repostsAuthoredInPeriod,
+    articlesPublishedInPeriod,
+    impressionsByDay,
+  ] = await Promise.all([
       db
         .select({ n: sql<number>`count(*)::int` })
         .from(schema.likes)
@@ -134,6 +148,63 @@ analyticsRoute.get('/overview', requireAuth(), async (c) => {
         .where(and(eq(schema.follows.followeeId, me), gte(schema.follows.createdAt, since)))
         .groupBy(sql`date_trunc('day', ${schema.follows.createdAt})`)
         .orderBy(sql`date_trunc('day', ${schema.follows.createdAt})`),
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.follows)
+        .where(eq(schema.follows.followeeId, me)),
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.follows)
+        .where(eq(schema.follows.followerId, me)),
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.posts)
+        .where(
+          and(
+            eq(schema.posts.authorId, me),
+            gte(schema.posts.createdAt, since),
+            isNull(schema.posts.deletedAt),
+            isNull(schema.posts.repostOfId),
+          ),
+        ),
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.posts)
+        .where(
+          and(
+            eq(schema.posts.authorId, me),
+            gte(schema.posts.createdAt, since),
+            isNull(schema.posts.deletedAt),
+            isNotNull(schema.posts.repostOfId),
+          ),
+        ),
+      db
+        .select({ n: sql<number>`count(*)::int` })
+        .from(schema.articles)
+        .where(
+          and(
+            eq(schema.articles.authorId, me),
+            eq(schema.articles.status, 'published'),
+            isNull(schema.articles.deletedAt),
+            isNotNull(schema.articles.publishedAt),
+            gte(schema.articles.publishedAt, since),
+          ),
+        ),
+      db
+        .select({
+          day: sql<string>`to_char(date_trunc('day', ${schema.analyticsEvents.createdAt}), 'YYYY-MM-DD')`,
+          n: sql<number>`count(*)::int`,
+        })
+        .from(schema.analyticsEvents)
+        .where(
+          and(
+            eq(schema.analyticsEvents.ownerUserId, me),
+            eq(schema.analyticsEvents.kind, 'impression'),
+            gte(schema.analyticsEvents.createdAt, since),
+          ),
+        )
+        .groupBy(sql`date_trunc('day', ${schema.analyticsEvents.createdAt})`)
+        .orderBy(sql`date_trunc('day', ${schema.analyticsEvents.createdAt})`),
     ])
 
   const engagements =
@@ -210,7 +281,15 @@ analyticsRoute.get('/overview', requireAuth(), async (c) => {
       newFollowers: followerDelta[0]?.n ?? 0,
       engagementRate,
     },
+    snapshot: {
+      followerCount: followerTotal[0]?.n ?? 0,
+      followingCount: followingTotal[0]?.n ?? 0,
+      originalPosts: originalPostsInPeriod[0]?.n ?? 0,
+      repostsAuthored: repostsAuthoredInPeriod[0]?.n ?? 0,
+      articlesPublished: articlesPublishedInPeriod[0]?.n ?? 0,
+    },
     followerGrowth: followsByDay.map((r) => ({ day: r.day, newFollowers: r.n })),
+    impressionsByDay: impressionsByDay.map((r) => ({ day: r.day, count: r.n })),
     topPosts,
   })
 })

@@ -1,10 +1,101 @@
 import { Link, createFileRoute, useRouter } from "@tanstack/react-router"
+import {
+  IconArticle,
+  IconBolt,
+  IconBookmark,
+  IconCalendar,
+  IconEye,
+  IconHeart,
+  IconMessageCircle,
+  IconQuote,
+  IconRepeat,
+  IconTrendingUp,
+  IconUserPlus,
+  IconUserSearch,
+  IconUsers,
+} from "@tabler/icons-react"
 import { useEffect, useMemo, useState } from "react"
-import {  api } from "../lib/api"
+import { api } from "../lib/api"
 import { authClient } from "../lib/auth"
-import type {AnalyticsOverview} from "../lib/api";
+import type { ReactNode } from "react"
+import type { AnalyticsOverview, Post } from "../lib/api"
 
 export const Route = createFileRoute("/analytics")({ component: Analytics })
+
+function formatPeriodStart(iso: string) {
+  try {
+    return new Date(iso).toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    })
+  } catch {
+    return iso
+  }
+}
+
+function formatPostAge(iso: string): string {
+  const d = new Date(iso).getTime()
+  const diff = Date.now() - d
+  const s = Math.floor(diff / 1000)
+  if (s < 60) return `${s}s ago`
+  const m = Math.floor(s / 60)
+  if (m < 60) return `${m}m ago`
+  const h = Math.floor(m / 60)
+  if (h < 24) return `${h}h ago`
+  const dd = Math.floor(h / 24)
+  if (dd < 7) return `${dd}d ago`
+  return new Date(iso).toLocaleDateString()
+}
+
+function useDenseDailySeries(
+  points: Array<{ day: string; n: number }>,
+  days: number,
+) {
+  return useMemo(() => {
+    const byDay = new Map(points.map((p) => [p.day, p.n]))
+    const out: Array<{ day: string; n: number }> = []
+    const today = new Date()
+    for (let i = days - 1; i >= 0; i--) {
+      const d = new Date(today.getTime() - i * 24 * 60 * 60 * 1000)
+      const key = d.toISOString().slice(0, 10)
+      out.push({ day: key, n: byDay.get(key) ?? 0 })
+    }
+    return out
+  }, [points, days])
+}
+
+function DailySparkline({
+  series,
+  emptyLabel,
+}: {
+  series: Array<{ n: number }>
+  emptyLabel: string
+}) {
+  if (series.every((s) => s.n === 0)) {
+    return <p className="mt-3 text-xs text-muted-foreground">{emptyLabel}</p>
+  }
+
+  const width = 600
+  const height = 80
+  const max = Math.max(1, ...series.map((s) => s.n))
+  const step = width / Math.max(1, series.length - 1)
+  const pts = series
+    .map((s, i) => `${i * step},${height - (s.n / max) * height}`)
+    .join(" ")
+
+  return (
+    <svg viewBox={`0 0 ${width} ${height}`} className="mt-3 h-20 w-full" preserveAspectRatio="none">
+      <polyline
+        points={pts}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        className="text-primary"
+      />
+    </svg>
+  )
+}
 
 function Analytics() {
   const { data: session, isPending } = authClient.useSession()
@@ -27,19 +118,43 @@ function Analytics() {
       .catch((e) => setError(e instanceof Error ? e.message : "failed to load"))
   }, [session, days])
 
+  const followerSeries = useDenseDailySeries(
+    data?.followerGrowth.map((p) => ({ day: p.day, n: p.newFollowers })) ?? [],
+    data?.period.days ?? days,
+  )
+  const impressionSeries = useDenseDailySeries(
+    data?.impressionsByDay.map((p) => ({ day: p.day, n: p.count })) ?? [],
+    data?.period.days ?? days,
+  )
+
+  const engagementTotal = data?.totals.engagements ?? 0
+
   return (
     <main>
-      <header className="flex items-baseline justify-between border-b border-border px-4 py-3">
-        <div>
-          <h1 className="text-base font-semibold">Analytics</h1>
-          <p className="text-xs text-muted-foreground">
-            Free forever · no AI inference · self-reported only.
-          </p>
+      <header className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex gap-3">
+          <div className="mt-0.5 shrink-0 rounded-md border border-border p-2 text-muted-foreground">
+            <IconTrendingUp size={20} stroke={1.75} />
+          </div>
+          <div>
+            <h1 className="text-base font-semibold">Analytics</h1>
+            <p className="text-xs text-muted-foreground">
+              Free forever · no AI inference · self-reported only.
+            </p>
+            {data && (
+              <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
+                <IconCalendar size={14} stroke={1.75} className="shrink-0" />
+                <span>
+                  Window starts {formatPeriodStart(data.period.since)} · {data.period.days} days
+                </span>
+              </p>
+            )}
+          </div>
         </div>
         <select
           value={days}
           onChange={(e) => setDays(Number(e.target.value))}
-          className="rounded-md border border-border bg-transparent px-2 py-1 text-xs"
+          className="w-full shrink-0 rounded-md border border-border bg-transparent px-2 py-1.5 text-xs sm:w-auto"
         >
           <option value={7}>Last 7 days</option>
           <option value={28}>Last 28 days</option>
@@ -52,96 +167,178 @@ function Analytics() {
 
       {data && (
         <div className="space-y-6 px-4 py-4">
-          <section className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="Impressions" value={data.totals.impressions} />
-            <Stat label="Engagements" value={data.totals.engagements} />
-            <Stat label="New followers" value={data.totals.newFollowers} />
+          <section>
+            <h2 className="text-sm font-semibold">Audience and reach</h2>
+            <p className="text-xs text-muted-foreground">
+              Follower and following totals are current; new-follower counts use only the selected
+              window.
+            </p>
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <SnapshotCard
+                icon={<IconUsers size={18} stroke={1.75} />}
+                label="Followers"
+                value={data.snapshot.followerCount.toLocaleString()}
+                hint={`+${data.totals.newFollowers.toLocaleString()} this period`}
+              />
+              <SnapshotCard
+                icon={<IconUserSearch size={18} stroke={1.75} />}
+                label="Following"
+                value={data.snapshot.followingCount.toLocaleString()}
+                hint="Accounts you follow"
+              />
+              <SnapshotCard
+                icon={<IconUserPlus size={18} stroke={1.75} />}
+                label="New followers"
+                value={data.totals.newFollowers.toLocaleString()}
+                hint="First-time follows in this window"
+              />
+            </div>
+          </section>
+
+          <section>
+            <h2 className="text-sm font-semibold">Content you published</h2>
+            <p className="text-xs text-muted-foreground">
+              Posts and articles first published during the window (reposts counted separately).
+            </p>
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <SnapshotCard
+                icon={<IconMessageCircle size={18} stroke={1.75} />}
+                label="Original posts"
+                value={data.snapshot.originalPosts.toLocaleString()}
+                hint="Excludes repost rows"
+              />
+              <SnapshotCard
+                icon={<IconRepeat size={18} stroke={1.75} />}
+                label="Reposts"
+                value={data.snapshot.repostsAuthored.toLocaleString()}
+                hint="Shares of other people's posts"
+              />
+              <SnapshotCard
+                icon={<IconArticle size={18} stroke={1.75} />}
+                label="Articles published"
+                value={data.snapshot.articlesPublished.toLocaleString()}
+                hint="Long-form pieces went live"
+              />
+            </div>
+          </section>
+
+          <section className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <Stat
+              icon={<IconEye size={18} stroke={1.75} />}
+              label="Impressions"
+              value={data.totals.impressions}
+              hint="Feed or profile surfaces of your posts (client-reported)"
+            />
+            <Stat
+              icon={<IconBolt size={18} stroke={1.75} />}
+              label="Engagements"
+              value={data.totals.engagements}
+              hint="Likes, reposts, replies, bookmarks, quotes on your posts"
+            />
+            <Stat
+              icon={<IconTrendingUp size={18} stroke={1.75} />}
               label="Engagement rate"
               value={`${(data.totals.engagementRate * 100).toFixed(1)}%`}
               hint={
                 data.totals.impressions === 0
-                  ? "No impressions yet"
-                  : `${data.totals.engagements} / ${data.totals.impressions}`
+                  ? "No impressions yet in this window"
+                  : `${data.totals.engagements.toLocaleString()} ÷ ${data.totals.impressions.toLocaleString()} impressions`
               }
             />
           </section>
 
-          <section className="rounded-md border border-border p-4">
-            <h2 className="text-sm font-semibold">Follower growth</h2>
-            <p className="text-xs text-muted-foreground">
-              New follows per day over the selected window.
-            </p>
-            <FollowerSparkline points={data.followerGrowth} days={data.period.days} />
-          </section>
+          <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+            <section className="rounded-md border border-border p-4">
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <IconEye size={16} stroke={1.75} className="text-muted-foreground" />
+                Impressions per day
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                How often your posts were surfaced to viewers (same source as headline impressions).
+              </p>
+              <DailySparkline
+                series={impressionSeries}
+                emptyLabel="No impressions recorded in this period."
+              />
+            </section>
+            <section className="rounded-md border border-border p-4">
+              <h2 className="flex items-center gap-2 text-sm font-semibold">
+                <IconUserPlus size={16} stroke={1.75} className="text-muted-foreground" />
+                New follows per day
+              </h2>
+              <p className="text-xs text-muted-foreground">
+                New followers only; unfollows are not subtracted here.
+              </p>
+              <DailySparkline
+                series={followerSeries}
+                emptyLabel="No new followers in this period."
+              />
+            </section>
+          </div>
 
           <section className="rounded-md border border-border">
             <header className="border-b border-border px-4 py-3">
-              <h2 className="text-sm font-semibold">Breakdown</h2>
+              <h2 className="text-sm font-semibold">Engagement breakdown</h2>
+              <p className="text-xs text-muted-foreground">
+                Actions others took on your posts in this window. Share shows fraction of total
+                engagements.
+              </p>
             </header>
-            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-3 text-sm sm:grid-cols-5">
-              <Row label="Likes" value={data.totals.likes} />
-              <Row label="Reposts" value={data.totals.reposts} />
-              <Row label="Replies" value={data.totals.replies} />
-              <Row label="Quotes" value={data.totals.quotes} />
-              <Row label="Bookmarks" value={data.totals.bookmarks} />
-            </dl>
+            <ul className="divide-y divide-border px-4 py-1">
+              <BreakdownRow
+                icon={<IconHeart className="size-4 shrink-0" stroke={1.75} />}
+                label="Likes"
+                value={data.totals.likes}
+                share={engagementTotal > 0 ? data.totals.likes / engagementTotal : 0}
+              />
+              <BreakdownRow
+                icon={<IconRepeat className="size-4 shrink-0" stroke={1.75} />}
+                label="Reposts"
+                value={data.totals.reposts}
+                share={engagementTotal > 0 ? data.totals.reposts / engagementTotal : 0}
+              />
+              <BreakdownRow
+                icon={<IconMessageCircle className="size-4 shrink-0" stroke={1.75} />}
+                label="Replies"
+                value={data.totals.replies}
+                share={engagementTotal > 0 ? data.totals.replies / engagementTotal : 0}
+              />
+              <BreakdownRow
+                icon={<IconQuote className="size-4 shrink-0" stroke={1.75} />}
+                label="Quotes"
+                value={data.totals.quotes}
+                share={engagementTotal > 0 ? data.totals.quotes / engagementTotal : 0}
+              />
+              <BreakdownRow
+                icon={<IconBookmark className="size-4 shrink-0" stroke={1.75} />}
+                label="Bookmarks"
+                value={data.totals.bookmarks}
+                share={engagementTotal > 0 ? data.totals.bookmarks / engagementTotal : 0}
+              />
+            </ul>
+            {engagementTotal === 0 && (
+              <p className="border-t border-border px-4 py-3 text-xs text-muted-foreground">
+                No engagements in this window yet. Posting publicly and getting replies or likes will
+                populate this section.
+              </p>
+            )}
           </section>
 
           <section className="rounded-md border border-border">
             <header className="border-b border-border px-4 py-3">
               <h2 className="text-sm font-semibold">Top posts</h2>
               <p className="text-xs text-muted-foreground">
-                Ranked by total engagement within the window.
+                Your posts from this period, ranked by lifetime engagement counters (likes, reposts,
+                replies, bookmarks, quotes).
               </p>
             </header>
             {data.topPosts.length === 0 ? (
-              <p className="p-4 text-sm text-muted-foreground">
-                No posts in this period yet.
-              </p>
+              <p className="p-4 text-sm text-muted-foreground">No posts in this period yet.</p>
             ) : (
               <ul>
-                {data.topPosts.map((p) => {
-                  const total =
-                    p.counts.likes +
-                    p.counts.reposts +
-                    p.counts.replies +
-                    p.counts.bookmarks +
-                    p.counts.quotes
-                  const excerpt =
-                    p.text.trim().length > 0
-                      ? p.text.trim().slice(0, 120) + (p.text.length > 120 ? "…" : "")
-                      : p.media && p.media.length > 0
-                      ? `[${p.media.length} image${p.media.length > 1 ? "s" : ""}]`
-                      : "—"
-                  const path = p.author.handle
-                    ? { to: "/$handle/p/$id" as const, params: { handle: p.author.handle, id: p.id } }
-                    : null
-                  return (
-                    <li
-                      key={p.id}
-                      className="flex items-start justify-between gap-4 border-t border-border px-4 py-3 first:border-t-0"
-                    >
-                      <div className="min-w-0 flex-1">
-                        {path ? (
-                          <Link {...path} className="text-sm hover:underline">
-                            {excerpt}
-                          </Link>
-                        ) : (
-                          <span className="text-sm">{excerpt}</span>
-                        )}
-                        <p className="mt-1 text-xs text-muted-foreground">
-                          ♥ {p.counts.likes} · 🔁 {p.counts.reposts} · 💬 {p.counts.replies} · 🔖{" "}
-                          {p.counts.bookmarks}
-                        </p>
-                      </div>
-                      <div className="shrink-0 text-right">
-                        <div className="text-sm font-semibold">{total}</div>
-                        <div className="text-xs text-muted-foreground">total</div>
-                      </div>
-                    </li>
-                  )
-                })}
+                {data.topPosts.map((p) => (
+                  <TopPostRow key={p.id} post={p} />
+                ))}
               </ul>
             )}
           </section>
@@ -151,72 +348,145 @@ function Analytics() {
   )
 }
 
-function Stat({ label, value, hint }: { label: string; value: number | string; hint?: string }) {
-  return (
-    <div className="rounded-md border border-border p-3">
-      <div className="text-xs text-muted-foreground">{label}</div>
-      <div className="mt-1 text-2xl font-semibold tabular-nums">
-        {typeof value === "number" ? value.toLocaleString() : value}
-      </div>
-      {hint && <div className="mt-1 text-[11px] text-muted-foreground">{hint}</div>}
-    </div>
-  )
-}
-
-function Row({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex items-center justify-between">
-      <dt className="text-muted-foreground">{label}</dt>
-      <dd className="font-semibold tabular-nums">{value.toLocaleString()}</dd>
-    </div>
-  )
-}
-
-function FollowerSparkline({
-  points,
-  days,
+function SnapshotCard({
+  icon,
+  label,
+  value,
+  hint,
 }: {
-  points: Array<{ day: string; newFollowers: number }>
-  days: number
+  icon: ReactNode
+  label: string
+  value: string
+  hint: string
 }) {
-  const series = useMemo(() => {
-    // Densify: fill in zero days so the line doesn't just connect the populated ones.
-    const byDay = new Map(points.map((p) => [p.day, p.newFollowers]))
-    const out: Array<{ day: string; n: number }> = []
-    const today = new Date()
-    for (let i = days - 1; i >= 0; i--) {
-      const d = new Date(today.getTime() - i * 24 * 60 * 60 * 1000)
-      const key = d.toISOString().slice(0, 10)
-      out.push({ day: key, n: byDay.get(key) ?? 0 })
-    }
-    return out
-  }, [points, days])
+  return (
+    <div className="flex gap-3 rounded-md border border-border p-3">
+      <div className="shrink-0 text-muted-foreground">{icon}</div>
+      <div className="min-w-0">
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="mt-0.5 text-xl font-semibold tabular-nums">{value}</div>
+        <p className="mt-1 text-[11px] leading-snug text-muted-foreground">{hint}</p>
+      </div>
+    </div>
+  )
+}
 
-  if (series.every((s) => s.n === 0)) {
-    return (
-      <p className="mt-3 text-xs text-muted-foreground">
-        No new followers in this period.
-      </p>
-    )
-  }
+function Stat({
+  icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: ReactNode
+  label: string
+  value: number | string
+  hint?: string
+}) {
+  return (
+    <div className="flex gap-2 rounded-md border border-border p-3">
+      <div className="mt-0.5 shrink-0 text-muted-foreground">{icon}</div>
+      <div className="min-w-0">
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="mt-1 text-2xl font-semibold tabular-nums">
+          {typeof value === "number" ? value.toLocaleString() : value}
+        </div>
+        {hint && <div className="mt-1 text-[11px] leading-snug text-muted-foreground">{hint}</div>}
+      </div>
+    </div>
+  )
+}
 
-  const width = 600
-  const height = 80
-  const max = Math.max(1, ...series.map((s) => s.n))
-  const step = width / Math.max(1, series.length - 1)
-  const pts = series
-    .map((s, i) => `${i * step},${height - (s.n / max) * height}`)
-    .join(" ")
+function BreakdownRow({
+  icon,
+  label,
+  value,
+  share,
+}: {
+  icon: React.ReactNode
+  label: string
+  value: number
+  share: number
+}) {
+  const pct = Math.round(share * 1000) / 10
+  return (
+    <li className="flex flex-col gap-2 py-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+      <div className="flex min-w-0 flex-1 items-center gap-2">
+        <span className="text-muted-foreground">{icon}</span>
+        <span className="text-sm text-muted-foreground">{label}</span>
+      </div>
+      <div className="flex w-full flex-col items-stretch gap-1 sm:w-48 sm:items-end">
+        <span className="text-sm font-semibold tabular-nums sm:text-right">
+          {value.toLocaleString()}
+          <span className="ml-2 text-xs font-normal text-muted-foreground">
+            {value === 0 ? "0%" : `${pct}%`}
+          </span>
+        </span>
+        <div className="h-1 w-full overflow-hidden rounded-full bg-muted sm:max-w-[12rem]">
+          <div
+            className="h-full rounded-full bg-primary transition-[width]"
+            style={{ width: `${Math.min(100, Math.max(0, pct))}%` }}
+          />
+        </div>
+      </div>
+    </li>
+  )
+}
+
+function TopPostRow({ post: p }: { post: Post }) {
+  const total =
+    p.counts.likes +
+    p.counts.reposts +
+    p.counts.replies +
+    p.counts.bookmarks +
+    p.counts.quotes
+  const excerpt =
+    p.text.trim().length > 0
+      ? p.text.trim().slice(0, 140) + (p.text.length > 140 ? "…" : "")
+      : p.media && p.media.length > 0
+        ? `[${p.media.length} image${p.media.length > 1 ? "s" : ""}]`
+        : "—"
+  const path = p.author.handle
+    ? { to: "/$handle/p/$id" as const, params: { handle: p.author.handle, id: p.id } }
+    : null
 
   return (
-    <svg viewBox={`0 0 ${width} ${height}`} className="mt-3 h-20 w-full" preserveAspectRatio="none">
-      <polyline
-        points={pts}
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={2}
-        className="text-primary"
-      />
-    </svg>
+    <li className="flex flex-col gap-3 border-t border-border px-4 py-3 first:border-t-0 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+      <div className="min-w-0 flex-1">
+        {path ? (
+          <Link {...path} className="text-sm leading-snug hover:underline">
+            {excerpt}
+          </Link>
+        ) : (
+          <span className="text-sm leading-snug">{excerpt}</span>
+        )}
+        <p className="mt-1 text-xs text-muted-foreground">{formatPostAge(p.createdAt)}</p>
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-muted-foreground">
+          <span className="inline-flex items-center gap-1.5">
+            <IconHeart className="size-4 shrink-0" stroke={1.75} aria-hidden />
+            <span className="text-xs tabular-nums">{p.counts.likes}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <IconRepeat className="size-4 shrink-0" stroke={1.75} aria-hidden />
+            <span className="text-xs tabular-nums">{p.counts.reposts}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <IconMessageCircle className="size-4 shrink-0" stroke={1.75} aria-hidden />
+            <span className="text-xs tabular-nums">{p.counts.replies}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <IconBookmark className="size-4 shrink-0" stroke={1.75} aria-hidden />
+            <span className="text-xs tabular-nums">{p.counts.bookmarks}</span>
+          </span>
+          <span className="inline-flex items-center gap-1.5">
+            <IconQuote className="size-4 shrink-0" stroke={1.75} aria-hidden />
+            <span className="text-xs tabular-nums">{p.counts.quotes}</span>
+          </span>
+        </div>
+      </div>
+      <div className="shrink-0 border-border sm:border-l sm:pl-4 sm:text-right">
+        <div className="text-sm font-semibold tabular-nums">{total.toLocaleString()}</div>
+        <div className="text-xs text-muted-foreground">engagement</div>
+      </div>
+    </li>
   )
 }

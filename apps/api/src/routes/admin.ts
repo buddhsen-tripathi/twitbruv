@@ -320,6 +320,125 @@ adminRoute.get('/reports', async (c) => {
   return c.json({ reports: items, nextCursor })
 })
 
+adminRoute.get('/reports/:id', async (c) => {
+  const { db, mediaEnv } = c.get('ctx')
+  const id = c.req.param('id')
+
+  const [row] = await db
+    .select({ report: schema.reports, reporter: schema.users })
+    .from(schema.reports)
+    .leftJoin(schema.users, eq(schema.users.id, schema.reports.reporterId))
+    .where(eq(schema.reports.id, id))
+    .limit(1)
+
+  if (!row) return c.json({ error: 'not_found' }, 404)
+
+  const r = row.report
+  const reporter = row.reporter
+
+  let subject:
+    | {
+        type: 'post'
+        post: {
+          id: string
+          text: string
+          sensitive: boolean
+          contentWarning: string | null
+          createdAt: string
+          deletedAt: string | null
+          author: {
+            id: string
+            handle: string | null
+            displayName: string | null
+            avatarUrl: string | null
+          } | null
+        }
+      }
+    | {
+        type: 'user'
+        user: {
+          id: string
+          handle: string | null
+          displayName: string | null
+          avatarUrl: string | null
+          banned: boolean
+        }
+      }
+    | { type: 'unknown'; subjectType: string; subjectId: string }
+    | null = null
+
+  if (r.subjectType === 'post') {
+    const [postRow] = await db
+      .select({ post: schema.posts, author: schema.users })
+      .from(schema.posts)
+      .leftJoin(schema.users, eq(schema.users.id, schema.posts.authorId))
+      .where(eq(schema.posts.id, r.subjectId))
+      .limit(1)
+    if (postRow) {
+      subject = {
+        type: 'post',
+        post: {
+          id: postRow.post.id,
+          text: postRow.post.text,
+          sensitive: postRow.post.sensitive,
+          contentWarning: postRow.post.contentWarning,
+          createdAt: postRow.post.createdAt.toISOString(),
+          deletedAt: postRow.post.deletedAt?.toISOString() ?? null,
+          author: postRow.author
+            ? {
+                id: postRow.author.id,
+                handle: postRow.author.handle,
+                displayName: postRow.author.displayName,
+                avatarUrl: assetUrl(mediaEnv, postRow.author.avatarUrl),
+              }
+            : null,
+        },
+      }
+    }
+  } else if (r.subjectType === 'user') {
+    const [u] = await db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.id, r.subjectId))
+      .limit(1)
+    if (u) {
+      subject = {
+        type: 'user',
+        user: {
+          id: u.id,
+          handle: u.handle,
+          displayName: u.displayName,
+          avatarUrl: assetUrl(mediaEnv, u.avatarUrl),
+          banned: u.banned,
+        },
+      }
+    }
+  } else {
+    subject = { type: 'unknown', subjectType: r.subjectType, subjectId: r.subjectId }
+  }
+
+  return c.json({
+    id: r.id,
+    subjectType: r.subjectType,
+    subjectId: r.subjectId,
+    reason: r.reason,
+    details: r.details,
+    status: r.status,
+    createdAt: r.createdAt.toISOString(),
+    resolvedAt: r.resolvedAt?.toISOString() ?? null,
+    resolutionNote: r.resolutionNote,
+    reporter: reporter
+      ? {
+          id: reporter.id,
+          handle: reporter.handle,
+          displayName: reporter.displayName,
+          avatarUrl: assetUrl(mediaEnv, reporter.avatarUrl),
+        }
+      : null,
+    subject,
+  })
+})
+
 const resolveSchema = z.object({
   status: z.enum(['triaged', 'actioned', 'dismissed']),
   resolutionNote: z.string().trim().max(1000).optional(),
