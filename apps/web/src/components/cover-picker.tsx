@@ -1,6 +1,7 @@
 import { useRef, useState } from "react"
 import { IconPhoto, IconX } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
+import { getPastedImageFiles } from "../lib/clipboard-images"
 import { compressImage, uploadImage } from "../lib/media"
 
 /**
@@ -64,12 +65,21 @@ export function CoverPicker({
     if (file) pick(file)
   }
 
+  function onPaste(e: React.ClipboardEvent) {
+    if (busy) return
+    const files = getPastedImageFiles(e)
+    if (files.length === 0) return
+    e.preventDefault()
+    pick(files[0])
+  }
+
   return (
     <div
       className="space-y-1"
       onDragOver={onDragOver}
       onDragLeave={onDragLeave}
       onDrop={onDrop}
+      onPaste={onPaste}
     >
       <input
         ref={fileInputRef}

@@ -11,6 +11,7 @@ export type AppPageHeaderSpec = {
   title: ReactNode
   action?: ReactNode
   className?: string
+  plainTitle?: boolean
 } | null
 
 type AppPageHeaderContextValue = {
@@ -64,10 +65,14 @@ export function AppPageHeaderContent({
         className
       )}
     >
-      <div className="min-w-0">
-        <h1 className="text-base font-semibold leading-tight text-foreground">
-          {spec.title}
-        </h1>
+      <div className={spec.plainTitle ? "min-w-0 flex-1" : "min-w-0"}>
+        {spec.plainTitle ? (
+          spec.title
+        ) : (
+          <h1 className="text-base font-semibold leading-tight text-foreground">
+            {spec.title}
+          </h1>
+        )}
       </div>
       {spec.action ? <div className="shrink-0">{spec.action}</div> : null}
     </div>

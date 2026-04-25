@@ -1,6 +1,7 @@
 import { useRef, useState } from "react"
 import { IconCamera, IconTrash } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
+import { getPastedImageFiles } from "../lib/clipboard-images"
 import { pickVariantUrl, uploadImage } from "../lib/media"
 
 export function BannerUpload({
@@ -54,6 +55,14 @@ export function BannerUpload({
     if (file) upload(file)
   }
 
+  function onPaste(e: React.ClipboardEvent) {
+    if (uploading) return
+    const files = getPastedImageFiles(e)
+    if (files.length === 0) return
+    e.preventDefault()
+    void upload(files[0])
+  }
+
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between">
@@ -83,6 +92,7 @@ export function BannerUpload({
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
+        onPaste={onPaste}
         className={`group relative block h-36 w-full overflow-hidden rounded-md border bg-muted transition ${
           dragOver ? "border-primary ring-2 ring-primary" : "border-border"
         }`}

@@ -11,6 +11,7 @@ import {
 import { Link } from "@tanstack/react-router"
 import { Button } from "@workspace/ui/components/button"
 import { api } from "../lib/api"
+import { getPastedImageFiles } from "../lib/clipboard-images"
 import { subscribeToDmStream } from "../lib/dm-stream"
 import { uploadImage } from "../lib/media"
 import { useMe } from "../lib/me"
@@ -357,6 +358,14 @@ function ChatView({
     if (file) attachFile(file)
   }
 
+  function onPaste(e: React.ClipboardEvent<HTMLInputElement>) {
+    if (sending) return
+    const files = getPastedImageFiles(e)
+    if (files.length === 0) return
+    e.preventDefault()
+    attachFile(files[0])
+  }
+
   return (
     <div
       className="relative flex h-[32rem] max-h-[calc(100vh-6rem)] flex-col"
@@ -447,6 +456,7 @@ function ChatView({
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
+          onPaste={onPaste}
           placeholder={pending ? "Add a caption…" : "Message..."}
           disabled={sending}
           className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"

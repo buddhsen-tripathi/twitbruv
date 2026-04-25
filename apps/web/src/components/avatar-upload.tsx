@@ -1,6 +1,7 @@
 import { useRef, useState } from "react"
 import { IconCamera, IconTrash } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
+import { getPastedImageFiles } from "../lib/clipboard-images"
 import { pickVariantUrl, uploadImage } from "../lib/media"
 
 export function AvatarUpload({
@@ -57,6 +58,14 @@ export function AvatarUpload({
     if (file) upload(file)
   }
 
+  function onPaste(e: React.ClipboardEvent) {
+    if (uploading) return
+    const files = getPastedImageFiles(e)
+    if (files.length === 0) return
+    e.preventDefault()
+    void upload(files[0])
+  }
+
   return (
     <div className="flex items-center gap-4">
       <div
@@ -64,6 +73,7 @@ export function AvatarUpload({
         onDragOver={onDragOver}
         onDragLeave={onDragLeave}
         onDrop={onDrop}
+        onPaste={onPaste}
       >
         <div
           className={`size-20 overflow-hidden rounded-full ring-2 transition ${
