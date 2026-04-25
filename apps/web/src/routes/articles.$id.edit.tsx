@@ -36,10 +36,10 @@ function EditArticle() {
   useEffect(() => {
     api
       .article(id)
-      .then(({ article }) => {
-        setArticle(article)
-        setTitle(article.title)
-        setSubtitle(article.subtitle ?? "")
+      .then(({ article: next }) => {
+        setArticle(next)
+        setTitle(next.title)
+        setSubtitle(next.subtitle ?? "")
       })
       .catch((e) =>
         setLoadError(e instanceof ApiError ? e.message : "not found")

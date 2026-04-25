@@ -1,9 +1,20 @@
 import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { useCallback, useEffect, useState } from "react"
 import { Button } from "@workspace/ui/components/button"
+import { Input } from "@workspace/ui/components/input"
 import { ApiError, api } from "../lib/api"
 import { authClient } from "../lib/auth"
+import {
+  PageEmpty,
+  PageError,
+  PageHeader,
+  PageLoading,
+} from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
+import {
+  UnderlineTabButton,
+  UnderlineTabRow,
+} from "../components/underline-tab-row"
 import type { ScheduledPost } from "../lib/api"
 
 export const Route = createFileRoute("/drafts")({ component: Drafts })
@@ -25,10 +36,10 @@ function Drafts() {
   const refresh = useCallback(async () => {
     setError(null)
     try {
-      const { items } = await api.scheduledPosts(
+      const { items: next } = await api.scheduledPosts(
         tab === "drafts" ? "draft" : "scheduled"
       )
-      setItems(items)
+      setItems(next)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "load failed")
       setItems([])
@@ -77,43 +88,35 @@ function Drafts() {
   return (
     <PageFrame>
       <main>
-        <header className="border-b border-border px-4 py-3">
-          <h1 className="text-base font-semibold">Drafts &amp; scheduled</h1>
-          <p className="text-xs text-muted-foreground">
-            Drafts are private. Scheduled posts publish automatically at the
-            chosen time.
-          </p>
-        </header>
-        <div className="flex border-b border-border">
+        <PageHeader
+          title="Drafts & scheduled"
+          description="Drafts stay private. Scheduled posts publish at the time you set."
+        />
+        <UnderlineTabRow>
           {(["drafts", "scheduled"] as Array<Tab>).map((t) => (
-            <button
+            <UnderlineTabButton
               key={t}
+              active={tab === t}
               onClick={() => setTab(t)}
-              className={`flex-1 px-4 py-3 text-sm font-medium transition ${
-                tab === t
-                  ? "border-b-2 border-primary text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              }`}
             >
               {t === "drafts" ? "Drafts" : "Scheduled"}
-            </button>
+            </UnderlineTabButton>
           ))}
-        </div>
+        </UnderlineTabRow>
 
-        {error && (
-          <div className="border-b border-border bg-destructive/10 px-4 py-2 text-xs text-destructive">
-            {error}
-          </div>
-        )}
+        {error && <PageError message={error} />}
 
         {items === null ? (
-          <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-            loading…
-          </p>
+          <PageLoading label="Loading…" />
         ) : items.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-            {tab === "drafts" ? "no drafts saved yet." : "no scheduled posts."}
-          </p>
+          <PageEmpty
+            title={tab === "drafts" ? "No drafts yet" : "No scheduled posts"}
+            description={
+              tab === "drafts"
+                ? "Compose a post and save it as a draft, or schedule one for later."
+                : "Schedule a draft to see it here."
+            }
+          />
         ) : (
           <ul className="divide-y divide-border">
             {items.map((item) => (
@@ -194,12 +197,12 @@ function DraftRow({
       </div>
       {editing && (
         <div className="mt-2 flex flex-wrap items-center gap-2 text-xs">
-          <input
+          <Input
             type="datetime-local"
             value={scheduleAt}
             min={toLocalInput(new Date(Date.now() + 90_000).toISOString())}
             onChange={(e) => setScheduleAt(e.target.value)}
-            className="rounded-md border border-border bg-background px-2 py-1"
+            className="h-8 w-auto min-w-44 text-xs"
           />
           <Button
             size="sm"
@@ -244,7 +247,6 @@ function DraftRow({
   )
 }
 
-// "datetime-local" input expects "YYYY-MM-DDTHH:mm" in the user's local time, NOT a UTC ISO.
 function toLocalInput(iso: string): string {
   const d = new Date(iso)
   const pad = (n: number) => String(n).padStart(2, "0")

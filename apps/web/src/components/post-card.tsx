@@ -18,6 +18,7 @@ import {
   IconTrash,
 } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
+import { Textarea } from "@workspace/ui/components/textarea"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -655,11 +656,11 @@ export function PostCard({
           </header>
           {editing ? (
             <div className="mt-1">
-              <textarea
+              <Textarea
                 value={editText}
                 onChange={(e) => setEditText(e.target.value)}
                 rows={3}
-                className="w-full resize-none bg-transparent text-sm focus:outline-none"
+                className="min-h-20 border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
                 maxLength={POST_MAX_LEN}
               />
               <div className="mt-1 flex items-center justify-between text-xs">
@@ -748,7 +749,7 @@ export function PostCard({
               size="sm"
               onClick={toggleLike}
               disabled={busy || !post.viewer}
-              className={`flex cursor-pointer items-center gap-2 transition hover:text-foreground ${post.viewer?.liked ? "text-rose-600" : ""}`}
+              className={`flex cursor-pointer items-center gap-2 transition hover:text-foreground ${post.viewer?.liked ? "text-foreground" : ""}`}
               aria-pressed={post.viewer?.liked}
             >
               {post.viewer?.liked ? (
@@ -763,7 +764,7 @@ export function PostCard({
               size="sm"
               onClick={toggleBookmark}
               disabled={busy || !post.viewer}
-              className={`flex cursor-pointer items-center gap-2 transition hover:text-foreground ${post.viewer?.bookmarked ? "text-sky-600" : ""}`}
+              className={`flex cursor-pointer items-center gap-2 transition hover:text-foreground ${post.viewer?.bookmarked ? "text-foreground" : ""}`}
               aria-pressed={post.viewer?.bookmarked}
             >
               {post.viewer?.bookmarked ? (
@@ -802,7 +803,7 @@ function RepostControl({
         size="sm"
         onClick={onToggleRepost}
         disabled={disabled}
-        className="flex cursor-pointer items-center gap-2 text-emerald-600 transition hover:text-foreground"
+        className="flex cursor-pointer items-center gap-2 text-foreground transition hover:text-foreground"
         aria-pressed
       >
         <IconRepeat className="size-4" />

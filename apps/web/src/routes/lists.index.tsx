@@ -2,9 +2,19 @@ import { Link, createFileRoute, useRouter } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 import { IconLock, IconPin, IconPinFilled, IconUsers } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
+import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
+import { Switch } from "@workspace/ui/components/switch"
+import { Textarea } from "@workspace/ui/components/textarea"
 import { LIST_SLUG_RE, LIST_TITLE_MAX } from "@workspace/validators"
 import { ApiError, api } from "../lib/api"
 import { authClient } from "../lib/auth"
+import {
+  PageEmpty,
+  PageError,
+  PageHeader,
+  PageLoading,
+} from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
 import type { UserList } from "../lib/api"
 
@@ -23,8 +33,8 @@ function ListsIndex() {
 
   async function refresh() {
     try {
-      const { lists } = await api.myLists()
-      setLists(lists)
+      const { lists: next } = await api.myLists()
+      setLists(next)
     } catch (e) {
       setError(e instanceof ApiError ? e.message : "load failed")
       setLists([])
@@ -37,17 +47,15 @@ function ListsIndex() {
   return (
     <PageFrame>
       <main>
-        <header className="flex items-center justify-between border-b border-border px-4 py-3">
-          <div>
-            <h1 className="text-base font-semibold">Lists</h1>
-            <p className="text-xs text-muted-foreground">
-              Curate users into private or public timelines.
-            </p>
-          </div>
-          <Button size="sm" onClick={() => setCreating((v) => !v)}>
-            {creating ? "Cancel" : "New list"}
-          </Button>
-        </header>
+        <PageHeader
+          title="Lists"
+          description="Curate people into private or public timelines."
+          action={
+            <Button size="sm" onClick={() => setCreating((v) => !v)}>
+              {creating ? "Cancel" : "New list"}
+            </Button>
+          }
+        />
 
         {creating && (
           <CreateListForm
@@ -59,20 +67,15 @@ function ListsIndex() {
           />
         )}
 
-        {error && (
-          <div className="border-b border-border bg-destructive/10 px-4 py-2 text-xs text-destructive">
-            {error}
-          </div>
-        )}
+        {error && <PageError message={error} />}
 
         {lists === null ? (
-          <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-            loading…
-          </p>
+          <PageLoading label="Loading…" />
         ) : lists.length === 0 ? (
-          <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-            no lists yet. Create one to start curating.
-          </p>
+          <PageEmpty
+            title="No lists yet"
+            description="Create a list, then add members to build a focused timeline."
+          />
         ) : (
           <ul className="divide-y divide-border">
             {lists.map((list) => (
@@ -186,10 +189,10 @@ function CreateListForm({
         isPrivate,
       })
       await onCreated()
-    } catch (e) {
-      const msg = e instanceof ApiError ? e.message : "create failed"
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "create failed"
       setError(
-        e instanceof ApiError && e.code === "slug_taken"
+        err instanceof ApiError && err.code === "slug_taken"
           ? "slug already in use"
           : msg
       )
@@ -199,41 +202,57 @@ function CreateListForm({
   }
 
   return (
-    <form onSubmit={submit} className="border-b border-border px-4 py-3">
-      <div className="space-y-2">
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="List name"
-          maxLength={LIST_TITLE_MAX}
-          className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm focus:ring-1 focus:ring-ring focus:outline-none"
-        />
-        <input
-          value={slug}
-          onChange={(e) => setSlug(e.target.value)}
-          placeholder={`slug (auto: ${slugFromTitle(title) || "your-slug"})`}
-          maxLength={40}
-          className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-xs focus:ring-1 focus:ring-ring focus:outline-none"
-        />
-        <textarea
-          value={description}
-          onChange={(e) => setDescription(e.target.value)}
-          placeholder="Description (optional)"
-          rows={2}
-          maxLength={280}
-          className="w-full resize-none rounded-md border border-border bg-transparent px-2 py-1 text-sm focus:ring-1 focus:ring-ring focus:outline-none"
-        />
-        <label className="flex items-center gap-2 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            checked={isPrivate}
-            onChange={(e) => setIsPrivate(e.target.checked)}
-            className="size-3.5 accent-primary"
+    <form
+      onSubmit={submit}
+      className="flex flex-col gap-3 border-b border-border px-4 py-3"
+    >
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="list-title">Name</Label>
+          <Input
+            id="list-title"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="List name"
+            maxLength={LIST_TITLE_MAX}
           />
-          Private (only you can see this list)
-        </label>
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="list-slug">Slug</Label>
+          <Input
+            id="list-slug"
+            value={slug}
+            onChange={(e) => setSlug(e.target.value)}
+            placeholder={`auto: ${slugFromTitle(title) || "your-slug"}`}
+            maxLength={40}
+            className="text-xs"
+          />
+        </div>
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="list-desc">Description</Label>
+          <Textarea
+            id="list-desc"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Optional"
+            rows={2}
+            maxLength={280}
+            className="min-h-16"
+          />
+        </div>
+        <div className="flex items-center justify-between gap-2 pt-0.5">
+          <Label htmlFor="list-private" className="text-xs text-muted-foreground">
+            Private list
+          </Label>
+          <Switch
+            id="list-private"
+            checked={isPrivate}
+            onCheckedChange={setIsPrivate}
+            size="sm"
+          />
+        </div>
       </div>
-      {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
+      {error && <p className="text-xs text-destructive">{error}</p>}
       <div className="mt-2 flex items-center justify-end gap-2">
         <Button size="sm" variant="ghost" onClick={onCancel} disabled={busy}>
           Cancel

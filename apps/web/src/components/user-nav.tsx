@@ -1,6 +1,5 @@
 import { Link, useRouter } from "@tanstack/react-router"
 import {
-  IconChartBar,
   IconDeviceDesktop,
   IconLogout,
   IconMoon,
@@ -96,10 +95,6 @@ export function UserNav({ user }: { user: SelfUser }) {
             <span>Profile</span>
           </DropdownMenuItem>
         )}
-        <DropdownMenuItem render={<Link to="/analytics" />}>
-          <IconChartBar size={16} stroke={1.75} />
-          <span>Analytics</span>
-        </DropdownMenuItem>
         {(user.role === "admin" || user.role === "owner") && (
           <DropdownMenuItem render={<Link to="/admin" />}>
             <IconShield size={16} stroke={1.75} />

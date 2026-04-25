@@ -25,6 +25,11 @@ import {
 import { api } from "../lib/api"
 import { useInfiniteScrollSentinel } from "../lib/use-infinite-scroll-sentinel"
 import { Avatar } from "../components/avatar"
+import { PageEmpty, PageLoading } from "../components/page-surface"
+import {
+  UnderlineTabButton,
+  UnderlineTabRow,
+} from "../components/underline-tab-row"
 import type { ColumnDef } from "@tanstack/react-table"
 import type {
   AdminReport,
@@ -167,32 +172,31 @@ function AdminReports() {
 
   return (
     <main className="flex min-h-0 flex-1 flex-col">
-      <div className="flex shrink-0 gap-2 border-b border-border px-4 py-3 text-sm">
+      <UnderlineTabRow className="px-0">
         {STATUSES.map((s) => (
-          <button
+          <UnderlineTabButton
             key={s}
+            active={s === status}
             onClick={() => setStatus(s)}
-            className={`rounded-md px-2 py-1 ${
-              s === status
-                ? "bg-muted font-semibold"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
+            className="capitalize"
           >
             {s}
-          </button>
+          </UnderlineTabButton>
         ))}
-      </div>
+      </UnderlineTabRow>
       <div
         ref={setScrollRoot}
         className="flex-1 overflow-auto overscroll-contain"
       >
         {loading && reports.length === 0 && (
-          <p className="p-4 text-sm text-muted-foreground">loading…</p>
+          <PageLoading className="py-8" label="Loading…" />
         )}
         {!loading && reports.length === 0 && (
-          <p className="p-4 text-sm text-muted-foreground">
-            No {status} reports.
-          </p>
+          <PageEmpty
+            title={`No ${status} reports`}
+            description="Change the status filter or check back later."
+            className="py-8"
+          />
         )}
         {reports.length > 0 && (
           <Table>

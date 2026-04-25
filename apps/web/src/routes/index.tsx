@@ -1,6 +1,13 @@
 import { Link, createFileRoute } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo, useState } from "react"
+import { Alert, AlertDescription, AlertTitle } from "@workspace/ui/components/alert"
 import { Button } from "@workspace/ui/components/button"
+import {
+  Card,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@workspace/ui/components/card"
 import { authClient } from "../lib/auth"
 import { api } from "../lib/api"
 import { APP_NAME } from "../lib/env"
@@ -8,7 +15,12 @@ import { useMe } from "../lib/me"
 import { useDelayedPresence } from "../lib/use-delayed-presence"
 import { Compose } from "../components/compose"
 import { Feed } from "../components/feed"
+import { PageLoading } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
+import {
+  UnderlineTabButton,
+  UnderlineTabRow,
+} from "../components/underline-tab-row"
 import { ThreadViewContent } from "../components/thread-view"
 import { homeThreadFromFeedSearch } from "../lib/home-from-feed"
 import {
@@ -96,7 +108,7 @@ function Landing() {
   if (isPending) {
     return (
       <PageFrame>
-        <main className="px-4 py-8" />
+        <PageLoading />
       </PageFrame>
     )
   }
@@ -114,40 +126,36 @@ function Landing() {
             }`}
           >
             {needsHandle ? (
-              <div className="m-4 rounded-md border border-primary/40 bg-primary/5 p-4">
-                <h2 className="text-sm font-semibold">
-                  Finish setting up your account
-                </h2>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Pick a handle so people can find you. This is permanent for
-                  v1.
-                </p>
-                <Link to="/settings" className="mt-3 inline-block">
-                  <Button size="sm">Claim your handle</Button>
-                </Link>
-              </div>
+              <Alert className="m-4">
+                <AlertTitle>Finish setup</AlertTitle>
+                <AlertDescription>
+                  Choose a handle so others can find you. Handles are permanent
+                  in v1.
+                </AlertDescription>
+                <div className="mt-3">
+                  <Button size="sm" nativeButton={false} render={<Link to="/settings" />}>
+                    Claim your handle
+                  </Button>
+                </div>
+              </Alert>
             ) : (
               <Compose onCreated={(p) => setNewPost(p)} collapsible />
             )}
-            <div className="flex border-b border-border">
+            <UnderlineTabRow>
               {(["following", "network", "all"] as Array<FeedTab>).map((t) => (
-                <button
+                <UnderlineTabButton
                   key={t}
+                  active={tab === t}
                   onClick={() => setTab(t)}
-                  className={`flex-1 px-4 py-3 text-sm font-medium transition ${
-                    tab === t
-                      ? "border-b-2 border-primary text-foreground"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
                 >
                   {t === "following"
                     ? "Following"
                     : t === "network"
                       ? "Network"
                       : "All"}
-                </button>
+                </UnderlineTabButton>
               ))}
-            </div>
+            </UnderlineTabRow>
             <Feed
               queryKey={["feed", tab]}
               load={
@@ -237,51 +245,61 @@ function Landing() {
 
   return (
     <PageFrame>
-      <main className="mx-auto max-w-3xl px-4 py-16">
-        <h1 className="text-3xl font-semibold tracking-tight">
-          Open-source. Free for everyone. No AI.
+      <main className="mx-auto max-w-3xl px-4 py-14">
+        <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+          A calm place to build in public
         </h1>
-        <p className="mt-4 max-w-prose text-sm text-muted-foreground">
-          {APP_NAME} is a developer-native social platform. Post, write
-          articles, DM, and connect your GitHub or GitLab — without paywalls,
-          trackers, or black-box rankers.
+        <p className="mt-3 max-w-prose text-sm leading-relaxed text-muted-foreground">
+          {APP_NAME} is a social layer for developers: short posts, articles,
+          DMs, and repo context. No paywalls, no ads, no black-box feeds.
         </p>
-        <div className="mt-8 flex gap-2">
-          <Link to="/signup">
-            <Button size="lg">Create an account</Button>
-          </Link>
-          <Link to="/login">
-            <Button size="lg" variant="outline">
-              Sign in
-            </Button>
-          </Link>
+        <div className="mt-6 flex flex-wrap gap-2">
+          <Button size="lg" nativeButton={false} render={<Link to="/signup" />}>
+            Create an account
+          </Button>
+          <Button
+            size="lg"
+            variant="outline"
+            nativeButton={false}
+            render={<Link to="/login" />}
+          >
+            Sign in
+          </Button>
         </div>
-        <ul className="mt-10 grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
-          <li className="rounded-md border border-border p-3">
-            <p className="font-medium">Posts + articles</p>
-            <p className="text-muted-foreground">
-              500 chars for posts, long-form for articles.
-            </p>
-          </li>
-          <li className="rounded-md border border-border p-3">
-            <p className="font-medium">Dev integrations</p>
-            <p className="text-muted-foreground">
-              Pin repos. Embed commits and PRs. GitHub, GitLab, Linear.
-            </p>
-          </li>
-          <li className="rounded-md border border-border p-3">
-            <p className="font-medium">Free analytics</p>
-            <p className="text-muted-foreground">
-              Creator dashboard, no paywall, no inference.
-            </p>
-          </li>
-          <li className="rounded-md border border-border p-3">
-            <p className="font-medium">Own your data</p>
-            <p className="text-muted-foreground">
-              Full export, self-hostable under AGPL-3.0.
-            </p>
-          </li>
-        </ul>
+        <div className="mt-10 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <Card size="sm">
+            <CardHeader>
+              <CardTitle>Posts and articles</CardTitle>
+              <CardDescription>
+                Short updates and long-form writing in one place.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+          <Card size="sm">
+            <CardHeader>
+              <CardTitle>Developer context</CardTitle>
+              <CardDescription>
+                Connect GitHub, GitLab, and tools you already use.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+          <Card size="sm">
+            <CardHeader>
+              <CardTitle>Simple analytics</CardTitle>
+              <CardDescription>
+                A creator dashboard without upsells or model-driven ranking.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+          <Card size="sm">
+            <CardHeader>
+              <CardTitle>Your data</CardTitle>
+              <CardDescription>
+                Export and self-host with AGPL-3.0.
+              </CardDescription>
+            </CardHeader>
+          </Card>
+        </div>
       </main>
     </PageFrame>
   )

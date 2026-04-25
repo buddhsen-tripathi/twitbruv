@@ -5,7 +5,6 @@ import {
   IconBookmark,
   IconBookmarkFilled,
   IconChartBar,
-  IconDots,
   IconHash,
   IconHeart,
   IconHeartFilled,
@@ -462,7 +461,7 @@ function AncestorPost({
               type="button"
               onClick={toggleRepost}
               disabled={busy || !post.viewer}
-              className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-emerald-500 ${post.viewer?.reposted ? "text-emerald-500" : ""}`}
+              className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-foreground ${post.viewer?.reposted ? "text-foreground" : ""}`}
             >
               <IconRepeat size={16} stroke={1.5} />
               <span>{post.counts.reposts}</span>
@@ -471,7 +470,7 @@ function AncestorPost({
               type="button"
               onClick={toggleLike}
               disabled={busy || !post.viewer}
-              className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-rose-500 ${post.viewer?.liked ? "text-rose-500" : ""}`}
+              className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-foreground ${post.viewer?.liked ? "text-foreground" : ""}`}
             >
               {post.viewer?.liked ? (
                 <IconHeartFilled size={16} />
@@ -484,7 +483,7 @@ function AncestorPost({
               type="button"
               onClick={toggleBookmark}
               disabled={busy || !post.viewer}
-              className={`flex items-center gap-1.5 py-0.5 transition-colors hover:text-foreground ${post.viewer?.bookmarked ? "text-sky-600" : ""}`}
+              className={`flex items-center gap-1.5 py-0.5 transition-colors hover:text-foreground ${post.viewer?.bookmarked ? "text-foreground" : ""}`}
             >
               {post.viewer?.bookmarked ? (
                 <IconBookmarkFilled size={16} />
@@ -608,7 +607,6 @@ function ParentPost({
             </span>
           )}
         </div>
-        <IconDots size={14} className="shrink-0 text-muted-foreground" />
       </div>
 
       <p className="mt-2.5 text-[15.5px] leading-[1.5] break-words whitespace-pre-wrap">
@@ -633,7 +631,7 @@ function ParentPost({
 
       {post.quoteOf && <QuoteEmbed post={post.quoteOf} />}
 
-      <div className="mt-2.5 flex items-center gap-3 font-mono text-[11px] text-muted-foreground">
+      <div className="mt-2.5 flex items-center gap-3 text-[11px] tabular-nums text-muted-foreground">
         {post.counts.reposts > 0 && <span>{post.counts.reposts} reposts</span>}
         {post.counts.likes > 0 && <span>{post.counts.likes} likes</span>}
         {post.counts.bookmarks > 0 && (
@@ -653,7 +651,7 @@ function ParentPost({
           type="button"
           onClick={toggleRepost}
           disabled={busy || !post.viewer}
-          className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-emerald-500 ${post.viewer?.reposted ? "text-emerald-500" : ""}`}
+          className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-foreground ${post.viewer?.reposted ? "text-foreground" : ""}`}
         >
           <IconRepeat size={16} stroke={1.5} />
           <span>{post.counts.reposts}</span>
@@ -662,7 +660,7 @@ function ParentPost({
           type="button"
           onClick={toggleLike}
           disabled={busy || !post.viewer}
-          className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-rose-500 ${post.viewer?.liked ? "text-rose-500" : ""}`}
+          className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-foreground ${post.viewer?.liked ? "text-foreground" : ""}`}
         >
           {post.viewer?.liked ? (
             <IconHeartFilled size={16} />
@@ -675,7 +673,7 @@ function ParentPost({
           type="button"
           onClick={toggleBookmark}
           disabled={busy || !post.viewer}
-          className={`flex items-center gap-1.5 py-0.5 transition-colors hover:text-foreground ${post.viewer?.bookmarked ? "text-sky-600" : ""}`}
+          className={`flex items-center gap-1.5 py-0.5 transition-colors hover:text-foreground ${post.viewer?.bookmarked ? "text-foreground" : ""}`}
         >
           {post.viewer?.bookmarked ? (
             <IconBookmarkFilled size={16} />
@@ -918,8 +916,6 @@ function ReplyCard({
         <span className="text-muted-foreground tabular-nums">
           {relativeTime(post.createdAt)}
         </span>
-        <div className="flex-1" />
-        <IconDots size={13} className="text-muted-foreground" />
       </div>
 
       <p className="mt-1.5 text-[13.5px] leading-[1.55] break-words whitespace-pre-wrap">
@@ -964,7 +960,7 @@ function ReplyCard({
           type="button"
           onClick={toggleRepost}
           disabled={busy || !post.viewer}
-          className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-emerald-500 ${post.viewer?.reposted ? "text-emerald-500" : ""}`}
+          className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-foreground ${post.viewer?.reposted ? "text-foreground" : ""}`}
         >
           <IconRepeat size={16} stroke={1.5} />
           <span>{post.counts.reposts}</span>
@@ -973,7 +969,7 @@ function ReplyCard({
           type="button"
           onClick={toggleLike}
           disabled={busy || !post.viewer}
-          className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-rose-500 ${post.viewer?.liked ? "text-rose-500" : ""}`}
+          className={`flex items-center gap-1.5 py-0.5 text-[13px] tabular-nums transition-colors hover:text-foreground ${post.viewer?.liked ? "text-foreground" : ""}`}
         >
           {post.viewer?.liked ? (
             <IconHeartFilled size={16} />

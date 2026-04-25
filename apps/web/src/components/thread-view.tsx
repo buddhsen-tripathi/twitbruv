@@ -114,18 +114,18 @@ export function ThreadViewContent({
       <div className={isPanel ? "min-h-0 flex-1 overflow-y-auto" : ""}>
         {error ? (
           <div className="px-4 py-16 text-center">
-            <p className="text-sm text-muted-foreground">post not found</p>
+            <p className="text-sm text-muted-foreground">Post not found</p>
             <Link
               to="/$handle"
               params={{ handle }}
-              className="mt-3 inline-block text-xs text-primary hover:underline"
+              className="mt-3 inline-block text-xs text-foreground underline-offset-4 hover:underline"
             >
-              back to @{handle}
+              Back to @{handle}
             </Link>
           </div>
         ) : !thread ? (
           <div className="px-4 py-16">
-            <p className="text-sm text-muted-foreground">loading…</p>
+            <p className="text-sm text-muted-foreground">Loading…</p>
           </div>
         ) : (
           <>
@@ -162,8 +162,8 @@ export function ThreadViewContent({
                 ))}
               </div>
             ) : (
-              <div className="border-t border-border px-4 py-6 text-sm text-muted-foreground">
-                No replies yet.
+              <div className="border-t border-border px-4 py-8 text-center text-sm text-muted-foreground">
+                No replies yet
               </div>
             )}
           </>

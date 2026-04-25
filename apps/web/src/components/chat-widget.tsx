@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import { motion } from "motion/react"
+import { MotionConfig, motion } from "motion/react"
 import {
   IconArrowLeft,
   IconMessage,
@@ -31,8 +31,8 @@ export function ChatWidget() {
 
     async function loadConversations() {
       try {
-        const { conversations } = await api.dmConversations()
-        if (!cancel) setConversations(conversations)
+        const { conversations: next } = await api.dmConversations()
+        if (!cancel) setConversations(next)
       } catch {
         // ignore
       }
@@ -85,6 +85,7 @@ export function ChatWidget() {
   const isExpanded = open || closing
 
   return (
+    <MotionConfig reducedMotion="user">
     <div className="fixed right-4 bottom-4 z-50">
       <motion.div
         onClick={!open && !closing ? () => setOpen(true) : undefined}
@@ -138,6 +139,7 @@ export function ChatWidget() {
         )}
       </motion.div>
     </div>
+    </MotionConfig>
   )
 }
 
@@ -263,8 +265,8 @@ function ChatView({
     async function load() {
       setLoading(true)
       try {
-        const { messages } = await api.dmMessages(conversation.id)
-        if (!cancel) setMessages(messages.reverse())
+        const { messages: next } = await api.dmMessages(conversation.id)
+        if (!cancel) setMessages(next.reverse())
       } catch {
         // ignore
       } finally {

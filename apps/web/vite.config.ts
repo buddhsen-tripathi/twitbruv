@@ -15,6 +15,9 @@ const config = defineConfig({
     tanstackStart(),
     viteReact(),
   ],
+  resolve: {
+    dedupe: ["react", "react-dom"],
+  },
   // @vercel/og ships its own Yoga + resvg WASM. Vite's pre-bundler cannot rewrite
   // those import.meta.url WASM references, so we keep the package external on the
   // SSR side and let Node resolve it directly at runtime. Sharp is a native module

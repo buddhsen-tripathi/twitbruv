@@ -7,6 +7,7 @@ import { ProfileActions } from "../components/profile-actions"
 import { ImageLightbox } from "../components/image-lightbox"
 import { RichText } from "../components/rich-text"
 import { VerifiedBadge } from "../components/verified-badge"
+import { NotFoundPanel, PageLoading } from "../components/page-surface"
 import { useMe } from "../lib/me"
 import { APP_NAME, WEB_URL } from "../lib/env"
 import { buildSeoMeta, canonicalLink, clipDescription } from "../lib/seo"
@@ -83,7 +84,7 @@ function Profile() {
     setError(null)
     api
       .user(handle)
-      .then(({ user }) => setUser(user))
+      .then(({ user: next }) => setUser(next))
       .catch((e) => setError(e instanceof ApiError ? e.message : "not found"))
   }, [handle])
 
@@ -94,15 +95,16 @@ function Profile() {
 
   if (error) {
     return (
-      <main className="px-4 py-16 text-center">
-        <p className="text-sm text-muted-foreground">user not found</p>
-      </main>
+      <NotFoundPanel
+        title="User not found"
+        message={`We couldn't find @${handle}. The handle may have changed or the account no longer exists.`}
+      />
     )
   }
   if (!user) {
     return (
-      <main className="px-4 py-16">
-        <p className="text-sm text-muted-foreground">loading…</p>
+      <main className="px-4 py-12">
+        <PageLoading />
       </main>
     )
   }
@@ -200,7 +202,9 @@ function Profile() {
                 params={{ handle: user.handle }}
                 className="hover:underline"
               >
-                <span className="font-semibold">{user.counts.following}</span>{" "}
+                <span className="font-semibold tabular-nums">
+                  {user.counts.following}
+                </span>{" "}
                 <span className="text-muted-foreground">following</span>
               </Link>
               <Link
@@ -208,13 +212,15 @@ function Profile() {
                 params={{ handle: user.handle }}
                 className="hover:underline"
               >
-                <span className="font-semibold">{user.counts.followers}</span>{" "}
+                <span className="font-semibold tabular-nums">
+                  {user.counts.followers}
+                </span>{" "}
                 <span className="text-muted-foreground">followers</span>
               </Link>
             </>
           )}
           <span>
-            <span className="font-semibold">{user.counts.posts}</span>{" "}
+            <span className="font-semibold tabular-nums">{user.counts.posts}</span>{" "}
             <span className="text-muted-foreground">posts</span>
           </span>
         </div>
@@ -265,7 +271,7 @@ function ProfileLists({ handle }: { handle: string }) {
     <div className="border-t border-border px-4 py-3 text-xs">
       {pinned && pinned.length > 0 && (
         <div className="mb-2">
-          <h2 className="mb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+          <h2 className="mb-1.5 text-xs font-medium text-muted-foreground">
             Pinned lists
           </h2>
           <div className="flex flex-wrap gap-1.5">
@@ -277,7 +283,9 @@ function ProfileLists({ handle }: { handle: string }) {
                 className="rounded-full border border-border bg-muted/40 px-2.5 py-1 hover:bg-muted"
               >
                 {l.title}
-                <span className="ml-1.5 text-muted-foreground">{l.memberCount}</span>
+                <span className="ml-1.5 tabular-nums text-muted-foreground">
+                  {l.memberCount}
+                </span>
               </Link>
             ))}
           </div>
@@ -285,7 +293,7 @@ function ProfileLists({ handle }: { handle: string }) {
       )}
       {listedOn && listedOn.length > 0 && (
         <div>
-          <h2 className="mb-1 text-[11px] font-semibold tracking-wide text-muted-foreground uppercase">
+          <h2 className="mb-1.5 text-xs font-medium text-muted-foreground">
             Lists @{handle} is on
           </h2>
           <div className="flex flex-wrap gap-1.5">

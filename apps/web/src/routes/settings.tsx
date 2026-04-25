@@ -4,6 +4,7 @@ import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { updateProfileSchema } from "@workspace/validators"
+import { Textarea } from "@workspace/ui/components/textarea"
 import { ApiError, api } from "../lib/api"
 import { authClient } from "../lib/auth"
 import { useMe } from "../lib/me"
@@ -11,19 +12,54 @@ import { ClaimHandle } from "../components/claim-handle"
 import { AvatarUpload } from "../components/avatar-upload"
 import { BannerUpload } from "../components/banner-upload"
 import { Avatar } from "../components/avatar"
+import { PageLoading } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
+import {
+  UnderlineTabButton,
+  UnderlineTabRow,
+} from "../components/underline-tab-row"
 import { VerifiedBadge } from "../components/verified-badge"
 import type { BlockedUser, MutedUser } from "../lib/api"
 
-export const Route = createFileRoute("/settings")({ component: Settings })
-
 type SettingsTab = "profile" | "account" | "sessions" | "privacy" | "danger"
+
+const SETTINGS_TABS: ReadonlyArray<SettingsTab> = [
+  "profile",
+  "account",
+  "sessions",
+  "privacy",
+  "danger",
+]
+
+type SettingsSearch = { tab?: SettingsTab }
+
+export const Route = createFileRoute("/settings")({
+  component: Settings,
+  validateSearch: (search: Record<string, unknown>): SettingsSearch => {
+    const raw = search.tab
+    return {
+      tab:
+        typeof raw === "string" && (SETTINGS_TABS as ReadonlyArray<string>).includes(raw)
+          ? (raw as SettingsTab)
+          : undefined,
+    }
+  },
+})
 
 function Settings() {
   const router = useRouter()
+  const navigate = Route.useNavigate()
   const { data: session, isPending } = authClient.useSession()
   const { me, setMe } = useMe()
-  const [tab, setTab] = useState<SettingsTab>("profile")
+  const { tab: tabSearch } = Route.useSearch()
+  const tab: SettingsTab = tabSearch ?? "profile"
+  const setTab = (next: SettingsTab) =>
+    navigate({
+      to: "/settings",
+      search: { tab: next === "profile" ? undefined : next },
+      replace: true,
+      resetScroll: false,
+    })
 
   useEffect(() => {
     if (isPending) return
@@ -34,7 +70,7 @@ function Settings() {
     return (
       <PageFrame>
         <main className="mx-auto max-w-xl px-4 py-8">
-          <p className="text-sm text-muted-foreground">loading…</p>
+          <PageLoading />
         </main>
       </PageFrame>
     )
@@ -57,33 +93,43 @@ function Settings() {
           </div>
         )}
 
-        <div className="mt-6 flex gap-1 overflow-x-auto border-b border-border">
-          <SettingsTabBtn
+        <UnderlineTabRow className="mt-6 min-w-0 overflow-x-auto">
+          <UnderlineTabButton
             active={tab === "profile"}
             onClick={() => setTab("profile")}
-            label="Profile"
-          />
-          <SettingsTabBtn
+            className="shrink-0 px-3"
+          >
+            Profile
+          </UnderlineTabButton>
+          <UnderlineTabButton
             active={tab === "account"}
             onClick={() => setTab("account")}
-            label="Account"
-          />
-          <SettingsTabBtn
+            className="shrink-0 px-3"
+          >
+            Account
+          </UnderlineTabButton>
+          <UnderlineTabButton
             active={tab === "sessions"}
             onClick={() => setTab("sessions")}
-            label="Sessions"
-          />
-          <SettingsTabBtn
+            className="shrink-0 px-3"
+          >
+            Sessions
+          </UnderlineTabButton>
+          <UnderlineTabButton
             active={tab === "privacy"}
             onClick={() => setTab("privacy")}
-            label="Privacy"
-          />
-          <SettingsTabBtn
+            className="shrink-0 px-3"
+          >
+            Privacy
+          </UnderlineTabButton>
+          <UnderlineTabButton
             active={tab === "danger"}
             onClick={() => setTab("danger")}
-            label="Danger zone"
-          />
-        </div>
+            className="shrink-0 px-3"
+          >
+            Danger zone
+          </UnderlineTabButton>
+        </UnderlineTabRow>
 
         <div className="mt-6">
           {tab === "profile" && <ProfileSection />}
@@ -98,30 +144,6 @@ function Settings() {
         </div>
       </main>
     </PageFrame>
-  )
-}
-
-function SettingsTabBtn({
-  active,
-  onClick,
-  label,
-}: {
-  active: boolean
-  onClick: () => void
-  label: string
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors ${
-        active
-          ? "border-b-2 border-primary text-foreground"
-          : "text-muted-foreground hover:text-foreground"
-      }`}
-    >
-      {label}
-    </button>
   )
 }
 
@@ -175,11 +197,11 @@ function ProfileSection() {
       return
     }
     try {
-      const { user } = await api.updateMe(parsed.data)
-      setMe(user)
+      const { user: next } = await api.updateMe(parsed.data)
+      setMe(next)
       setStatus("saved")
-    } catch (e) {
-      setStatus(e instanceof ApiError ? e.message : "save failed")
+    } catch (err) {
+      setStatus(err instanceof ApiError ? err.message : "save failed")
     }
   }
 
@@ -204,8 +226,8 @@ function ProfileSection() {
   }
 
   return (
-    <div className="space-y-8">
-      <section className="space-y-6">
+    <div className="flex flex-col gap-8">
+      <section className="flex flex-col gap-6">
         <h2 className="text-sm font-semibold">Profile media</h2>
         <BannerUpload
           currentUrl={me.bannerUrl}
@@ -221,10 +243,10 @@ function ProfileSection() {
       <form
         onSubmit={onSave}
         id="profile"
-        className="scroll-mt-4 space-y-3 border-t border-border pt-6"
+        className="scroll-mt-4 flex flex-col gap-3 border-t border-border pt-6"
       >
         <h2 className="text-sm font-semibold">Profile details</h2>
-        <div className="space-y-1">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="displayName">Display name</Label>
           <Input
             id="displayName"
@@ -232,16 +254,18 @@ function ProfileSection() {
             onChange={(e) => setDisplayName(e.target.value)}
           />
         </div>
-        <div className="space-y-1">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="bio">Bio</Label>
-          <Input
+          <Textarea
             id="bio"
             value={bio}
             onChange={(e) => setBio(e.target.value)}
             maxLength={280}
+            rows={3}
+            className="min-h-20"
           />
         </div>
-        <div className="space-y-1">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="location">Location</Label>
           <Input
             id="location"
@@ -249,7 +273,7 @@ function ProfileSection() {
             onChange={(e) => setLocation(e.target.value)}
           />
         </div>
-        <div className="space-y-1">
+        <div className="flex flex-col gap-1.5">
           <Label htmlFor="websiteUrl">Website</Label>
           <Input
             id="websiteUrl"
@@ -320,10 +344,10 @@ function AccountSection({ email }: { email: string }) {
   }
 
   return (
-    <section className="space-y-6">
+    <section className="flex flex-col gap-6">
       <h2 className="text-sm font-semibold">Account</h2>
 
-      <form onSubmit={changeEmail} className="space-y-2">
+      <form onSubmit={changeEmail} className="flex flex-col gap-2">
         <Label htmlFor="newEmail">Email</Label>
         <p className="text-xs text-muted-foreground">Currently {email}.</p>
         <Input
@@ -345,9 +369,10 @@ function AccountSection({ email }: { email: string }) {
         </Button>
       </form>
 
-      <form onSubmit={changePassword} className="space-y-2">
-        <Label>Change password</Label>
+      <form onSubmit={changePassword} className="flex flex-col gap-2">
+        <Label htmlFor="currentPassword">Change password</Label>
         <Input
+          id="currentPassword"
           type="password"
           autoComplete="current-password"
           value={currentPassword}
@@ -355,6 +380,7 @@ function AccountSection({ email }: { email: string }) {
           placeholder="Current password"
         />
         <Input
+          id="newPassword"
           type="password"
           autoComplete="new-password"
           value={newPassword}

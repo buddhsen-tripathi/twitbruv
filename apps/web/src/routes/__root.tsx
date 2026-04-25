@@ -1,12 +1,15 @@
 import {
   HeadContent,
+  Link,
   Outlet,
   Scripts,
   createRootRoute,
 } from "@tanstack/react-router"
 
 import appCss from "@workspace/ui/globals.css?url"
+import { Button } from "@workspace/ui/components/button"
 import { AppShell } from "../components/app-shell"
+import { NotFoundPanel } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
 import { ThemeProvider, themeBootstrapScript } from "../lib/theme"
 import { APP_NAME } from "../lib/env"
@@ -18,7 +21,6 @@ const DESCRIPTION = `${APP_NAME} — open-source, free-for-everyone social platf
 
 export const Route = createRootRoute({
   head: () => ({
-    // Per-page heads can override these; defaults are the landing-page card.
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
@@ -50,12 +52,23 @@ export const Route = createRootRoute({
   notFoundComponent: () => (
     <AppShell>
       <PageFrame>
-        <main className="p-4 pt-16">
-          <h1 className="text-lg font-semibold">404</h1>
-          <p className="text-sm text-muted-foreground">
-            The requested page could not be found.
-          </p>
-        </main>
+        <NotFoundPanel
+          title="Page not found"
+          message="That URL does not exist or was removed."
+        >
+          <div className="flex flex-wrap justify-center gap-2">
+            <Button nativeButton={false} render={<Link to="/" />}>
+              Home
+            </Button>
+            <Button
+              variant="outline"
+              nativeButton={false}
+              render={<Link to="/search" />}
+            >
+              Search
+            </Button>
+          </div>
+        </NotFoundPanel>
       </PageFrame>
     </AppShell>
   ),

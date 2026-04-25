@@ -25,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@workspace/ui/components/dropdown-menu"
 import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
 import {
   Table,
   TableBody,
@@ -38,6 +39,7 @@ import { api } from "../lib/api"
 import { useInfiniteScrollSentinel } from "../lib/use-infinite-scroll-sentinel"
 import { useMe } from "../lib/me"
 import { Avatar } from "../components/avatar"
+import { PageError, PageLoading } from "../components/page-surface"
 import { VerifiedBadge } from "../components/verified-badge"
 import type { ColumnDef } from "@tanstack/react-table"
 import type { AdminStats, AdminUser } from "../lib/api"
@@ -383,9 +385,9 @@ function AdminUsers() {
           placeholder="search by handle or email…"
         />
       </div>
-      {error && <p className="p-4 text-sm text-destructive">{error}</p>}
+      {error && <PageError message={error} />}
       {loading && users.length === 0 && (
-        <p className="p-4 text-sm text-muted-foreground">loading…</p>
+        <PageLoading className="py-8" label="Loading…" />
       )}
       {users.length > 0 && (
         <div
@@ -608,47 +610,53 @@ function ActionDialog({
         </DialogHeader>
         <div className="flex flex-col gap-3">
           {state.kind === "handle" && (
-            <label className="flex flex-col gap-1 text-xs">
-              <span className="text-muted-foreground">New handle</span>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="admin-action-handle" className="text-xs text-muted-foreground">
+                New handle
+              </Label>
               <Input
+                id="admin-action-handle"
                 value={handle}
                 onChange={(e) => setHandle(e.target.value)}
                 placeholder="newhandle"
                 autoCapitalize="none"
                 autoCorrect="off"
                 spellCheck={false}
-                autoFocus
               />
-            </label>
+            </div>
           )}
-          <label className="flex flex-col gap-1 text-xs">
-            <span className="text-muted-foreground">Reason (optional)</span>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="admin-action-reason" className="text-xs text-muted-foreground">
+              Reason (optional)
+            </Label>
             <Input
+              id="admin-action-reason"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Reason"
-              autoFocus={state.kind !== "handle"}
             />
-          </label>
+          </div>
           {config.showDuration && (
-            <label className="flex flex-col gap-1 text-xs">
-              <span className="text-muted-foreground">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="admin-action-hours" className="text-xs text-muted-foreground">
                 Duration in hours (blank = permanent)
-              </span>
+              </Label>
               <Input
+                id="admin-action-hours"
                 value={hours}
                 onChange={(e) => setHours(e.target.value)}
                 placeholder="e.g. 24"
                 inputMode="numeric"
               />
-            </label>
+            </div>
           )}
           {state.kind === "delete" && (
-            <label className="flex flex-col gap-1 text-xs">
-              <span className="text-muted-foreground">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="admin-action-confirm" className="text-xs text-muted-foreground">
                 Type <code className="rounded bg-muted px-1">{deleteConfirmText}</code> to confirm
-              </span>
+              </Label>
               <Input
+                id="admin-action-confirm"
                 value={confirm}
                 onChange={(e) => setConfirm(e.target.value)}
                 placeholder={deleteConfirmText}
@@ -656,7 +664,7 @@ function ActionDialog({
                 autoCorrect="off"
                 spellCheck={false}
               />
-            </label>
+            </div>
           )}
           {submitError && (
             <p className="text-xs text-destructive">{submitError}</p>

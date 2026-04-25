@@ -5,6 +5,7 @@ import {
   useWindowVirtualizer,
 } from "@tanstack/react-virtual"
 import { SkeletonPostCard } from "@workspace/ui/components/skeleton"
+import { PageEmpty, PageError } from "./page-surface"
 import { PostCard } from "./post-card"
 import type { InfiniteData } from "@tanstack/react-query"
 import type { FeedPage, Post } from "../lib/api"
@@ -157,14 +158,10 @@ export function Feed({
       </div>
     )
   if (error)
-    return (
-      <div className="px-4 py-6 text-sm text-destructive">{error.message}</div>
-    )
+    return <PageError message={error.message} className="px-4 py-6" />
   if (posts.length === 0)
     return (
-      <div className="p-8 text-center text-sm text-muted-foreground">
-        {emptyMessage}
-      </div>
+      <PageEmpty title="Nothing here yet" description={emptyMessage} />
     )
 
   const renderRow = (post: Post) => {

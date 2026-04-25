@@ -1,6 +1,14 @@
-import { createFileRoute, useRouter } from "@tanstack/react-router"
+import { Link, createFileRoute, useRouter } from "@tanstack/react-router"
 import { useState } from "react"
+import { Alert, AlertDescription } from "@workspace/ui/components/alert"
 import { Button } from "@workspace/ui/components/button"
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@workspace/ui/components/card"
 import { Input } from "@workspace/ui/components/input"
 import { Label } from "@workspace/ui/components/label"
 import { signUpSchema } from "@workspace/validators"
@@ -28,7 +36,7 @@ function SignUp() {
       displayName,
     })
     if (!parsed.success) {
-      setError(parsed.error.issues[0]?.message ?? "invalid input")
+      setError(parsed.error.issues[0]?.message ?? "Invalid input")
       return
     }
     setLoading(true)
@@ -38,71 +46,91 @@ function SignUp() {
         password,
         name: displayName || handle,
       })
-      if (err) throw new Error(err.message ?? "sign up failed")
+      if (err) throw new Error(err.message ?? "Sign up failed")
       await api.claimHandle(handle).catch(() => {})
       router.navigate({ to: "/settings" })
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "sign up failed")
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Sign up failed")
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <main className="mx-auto max-w-sm px-4 py-16">
-      <h1 className="text-xl font-semibold">Create an account</h1>
-      <p className="mt-1 text-xs text-muted-foreground">
-        Free forever. No ads. Check your email to verify before posting.
-      </p>
-      <form onSubmit={onSubmit} className="mt-6 space-y-3">
-        <div className="space-y-1">
-          <Label htmlFor="handle">Handle</Label>
-          <Input
-            id="handle"
-            value={handle}
-            onChange={(e) => setHandle(e.target.value)}
-            placeholder="yourhandle"
-            required
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="displayName">Display name</Label>
-          <Input
-            id="displayName"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="Your Name"
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="email">Email</Label>
-          <Input
-            id="email"
-            type="email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            required
-          />
-        </div>
-        <div className="space-y-1">
-          <Label htmlFor="password">Password</Label>
-          <Input
-            id="password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            minLength={10}
-            required
-          />
-          <p className="text-xs text-muted-foreground">
-            At least 10 characters.
+    <main className="mx-auto w-full max-w-md px-4 py-12">
+      <Card size="sm">
+        <CardHeader>
+          <CardTitle>Create an account</CardTitle>
+          <CardDescription>
+            Free, no ads. Verify your email before you post.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-4">
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+          <form onSubmit={onSubmit} className="flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="handle">Handle</Label>
+              <Input
+                id="handle"
+                value={handle}
+                onChange={(e) => setHandle(e.target.value)}
+                placeholder="yourhandle"
+                autoComplete="username"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="displayName">Display name</Label>
+              <Input
+                id="displayName"
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Your name"
+                autoComplete="name"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="email">Email</Label>
+              <Input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                autoComplete="email"
+                required
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                minLength={10}
+                autoComplete="new-password"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                At least 10 characters.
+              </p>
+            </div>
+            <Button type="submit" className="w-full" disabled={loading} size="lg">
+              {loading ? "Creating account…" : "Create account"}
+            </Button>
+          </form>
+          <p className="text-center text-xs text-muted-foreground">
+            Already have an account?{" "}
+            <Link to="/login" className="text-foreground underline-offset-4 hover:underline">
+              Sign in
+            </Link>
           </p>
-        </div>
-        {error && <p className="text-xs text-destructive">{error}</p>}
-        <Button type="submit" className="w-full" disabled={loading} size="lg">
-          {loading ? "creating…" : "Create account"}
-        </Button>
-      </form>
+        </CardContent>
+      </Card>
     </main>
   )
 }

@@ -234,6 +234,7 @@ export function OgAvatar({ src, initial, size }: AvatarProps) {
     return (
       <img
         src={src}
+        alt=""
         width={size}
         height={size}
         style={{

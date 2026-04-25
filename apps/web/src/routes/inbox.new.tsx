@@ -2,8 +2,11 @@ import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 import { IconX } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
+import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
 import { api } from "../lib/api"
 import { Avatar } from "../components/avatar"
+import { PageError, PageHeader } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
 import { VerifiedBadge } from "../components/verified-badge"
 import type { PublicUser } from "../lib/api"
@@ -22,7 +25,6 @@ function NewConversation() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Debounced handle/name search.
   useEffect(() => {
     if (q.trim().length < 2) {
       setResults([])
@@ -81,18 +83,21 @@ function NewConversation() {
   return (
     <PageFrame>
       <main>
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm">
-          <h1 className="text-base font-semibold">New conversation</h1>
-          <Button
-            size="sm"
-            disabled={selected.length === 0 || busy}
-            onClick={start}
-          >
-            {busy ? "…" : isGroup ? "Create group" : "Message"}
-          </Button>
-        </header>
+        <PageHeader
+          sticky
+          title="New conversation"
+          action={
+            <Button
+              size="sm"
+              disabled={selected.length === 0 || busy}
+              onClick={start}
+            >
+              {busy ? "…" : isGroup ? "Create group" : "Message"}
+            </Button>
+          }
+        />
 
-        <div className="space-y-4 px-4 py-4">
+        <div className="flex flex-col gap-4 px-4 py-4">
           {selected.length > 0 && (
             <div className="flex flex-wrap gap-2">
               {selected.map((u) => (
@@ -125,25 +130,34 @@ function NewConversation() {
             </div>
           )}
 
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="search by handle or name"
-            className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm focus:ring-1 focus:ring-ring focus:outline-none"
-            autoFocus
-          />
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="new-dm-search" className="text-xs text-muted-foreground">
+              Search
+            </Label>
+            <Input
+              id="new-dm-search"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Handle or name"
+            />
+          </div>
 
           {isGroup && (
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              placeholder="group name (optional)"
-              maxLength={80}
-              className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm focus:ring-1 focus:ring-ring focus:outline-none"
-            />
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="new-dm-group-title" className="text-xs text-muted-foreground">
+                Group name
+              </Label>
+              <Input
+                id="new-dm-group-title"
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                placeholder="Optional"
+                maxLength={80}
+              />
+            </div>
           )}
 
-          {error && <p className="text-sm text-destructive">{error}</p>}
+          {error && <PageError className="p-0" message={error} />}
 
           {q.trim().length >= 2 && (
             <ul className="rounded-md border border-border">

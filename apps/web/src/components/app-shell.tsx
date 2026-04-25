@@ -1,7 +1,8 @@
-import { Link, useLocation } from "@tanstack/react-router"
+import { Link, useLocation, useRouter } from "@tanstack/react-router"
 import {
   IconBell,
   IconBookmark,
+  IconChartBar,
   IconClock,
   IconHome,
   IconList,
@@ -23,6 +24,7 @@ import {
   SidebarProvider,
   useSidebar,
 } from "@workspace/ui/components/sidebar"
+import { Badge } from "@workspace/ui/components/badge"
 import { TooltipProvider } from "@workspace/ui/components/tooltip"
 import { useEffect, useState } from "react"
 import { authClient } from "../lib/auth"
@@ -98,9 +100,12 @@ export function AppShell({ children }: { children: ReactNode }) {
                           <IconBell />
                           <span>Notifications</span>
                           {unread > 0 && (
-                            <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground group-data-[collapsible=icon]:hidden">
+                            <Badge
+                              className="ml-auto min-w-5 tabular-nums group-data-[collapsible=icon]:hidden"
+                              variant="default"
+                            >
                               {unread > 99 ? "99+" : unread}
-                            </span>
+                            </Badge>
                           )}
                         </Link>
                       }
@@ -115,10 +120,25 @@ export function AppShell({ children }: { children: ReactNode }) {
                           <IconMail />
                           <span>Messages</span>
                           {dmUnread > 0 && (
-                            <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground group-data-[collapsible=icon]:hidden">
+                            <Badge
+                              className="ml-auto min-w-5 tabular-nums group-data-[collapsible=icon]:hidden"
+                              variant="default"
+                            >
                               {dmUnread > 99 ? "99+" : dmUnread}
-                            </span>
+                            </Badge>
                           )}
+                        </Link>
+                      }
+                    />
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      size="default"
+                      tooltip="analytics"
+                      render={
+                        <Link to="/analytics">
+                          <IconChartBar />
+                          <span>Analytics</span>
                         </Link>
                       }
                     />
@@ -212,8 +232,8 @@ function useUnreadNotifications(enabled: boolean) {
     let cancel = false
     async function tick() {
       try {
-        const { count } = await api.notificationsUnreadCount()
-        if (!cancel) setCount(count)
+        const { count: next } = await api.notificationsUnreadCount()
+        if (!cancel) setCount(next)
       } catch {}
     }
     tick()
@@ -236,8 +256,8 @@ function useUnreadDms(enabled: boolean) {
     let cancel = false
     async function refresh() {
       try {
-        const { count } = await api.dmUnreadCount()
-        if (!cancel) setCount(count)
+        const { count: next } = await api.dmUnreadCount()
+        if (!cancel) setCount(next)
       } catch {}
     }
     refresh()
@@ -255,12 +275,14 @@ function useUnreadDms(enabled: boolean) {
 }
 
 function SidebarCloseOnNavigate() {
-  const location = useLocation()
+  const router = useRouter()
   const { setOpenMobile } = useSidebar()
 
   useEffect(() => {
-    setOpenMobile(false)
-  }, [location.pathname, setOpenMobile])
+    return router.subscribe("onResolved", () => {
+      setOpenMobile(false)
+    })
+  }, [router, setOpenMobile])
 
   return null
 }

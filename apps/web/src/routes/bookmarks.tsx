@@ -3,6 +3,7 @@ import { useCallback, useEffect } from "react"
 import { api } from "../lib/api"
 import { authClient } from "../lib/auth"
 import { Feed } from "../components/feed"
+import { PageHeader } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
 
 export const Route = createFileRoute("/bookmarks")({ component: Bookmarks })
@@ -19,12 +20,10 @@ function Bookmarks() {
   return (
     <PageFrame>
       <main className="">
-        <header className="border-b border-border px-4 py-3">
-          <h1 className="text-base font-semibold">Bookmarks</h1>
-          <p className="text-xs text-muted-foreground">
-            only you can see this list.
-          </p>
-        </header>
+        <PageHeader
+          title="Bookmarks"
+          description="Only you can see this list."
+        />
         <Feed
           queryKey={["bookmarks"]}
           load={load}

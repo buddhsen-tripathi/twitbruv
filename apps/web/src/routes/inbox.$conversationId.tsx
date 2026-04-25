@@ -9,6 +9,9 @@ import {
   IconX,
 } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
+import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
+import { Textarea } from "@workspace/ui/components/textarea"
 import {
   Dialog,
   DialogContent,
@@ -25,6 +28,7 @@ import { api } from "../lib/api"
 import { authClient } from "../lib/auth"
 import { Avatar } from "../components/avatar"
 import { ImageLightbox } from "../components/image-lightbox"
+import { PageEmpty, PageError } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
 import { RichText } from "../components/rich-text"
 import { VerifiedBadge } from "../components/verified-badge"
@@ -475,15 +479,13 @@ function Thread() {
         )}
 
         <div ref={scrollerRef} className="flex-1 overflow-y-auto px-4 py-4">
-          {error && (
-            <p className="mx-auto mb-3 max-w-prose rounded-md border border-destructive/40 bg-destructive/5 p-2 text-center text-xs text-destructive">
-              {error}
-            </p>
-          )}
+          {error && <PageError className="mb-3 max-w-prose" message={error} />}
           {messages.length === 0 && !error && (
-            <p className="mt-12 text-center text-sm text-muted-foreground">
-              Say hi 👋
-            </p>
+            <PageEmpty
+              className="py-8"
+              title="No messages yet"
+              description="Send a message to start the thread."
+            />
           )}
 
           <ul className="flex flex-col gap-1">
@@ -540,16 +542,16 @@ function Thread() {
                 <IconX size={12} stroke={2} />
               </button>
             </div>
-            <input
+            <Input
               value={pending.altText}
               onChange={(e) =>
                 setPending((prev) =>
                   prev ? { ...prev, altText: e.target.value } : prev
                 )
               }
-              placeholder="Describe the image (alt text)"
+              placeholder="Image description (alt text)"
               maxLength={1000}
-              className="mt-1 flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-xs focus:ring-1 focus:ring-ring focus:outline-none"
+              className="mt-1 h-8 flex-1 text-xs"
             />
           </div>
         )}
@@ -575,18 +577,18 @@ function Thread() {
             >
               <IconPaperclip size={18} stroke={1.75} />
             </Button>
-            <textarea
+            <Textarea
               ref={textareaRef}
               value={draft}
               onChange={(e) => {
                 setDraft(e.target.value)
                 if (e.target.value.length > 0) pingTyping()
               }}
-              placeholder={pending ? "Add a caption…" : "Message"}
+              placeholder={pending ? "Add a caption" : "Message"}
               rows={1}
               disabled={sending}
               onKeyDown={onKeyDown}
-              className="flex-1 resize-none rounded-md border border-border bg-transparent px-3 py-2 text-sm leading-relaxed focus:ring-1 focus:ring-ring focus:outline-none disabled:opacity-60"
+              className="min-h-10 flex-1 py-2 text-sm leading-relaxed"
             />
             <Button
               type="submit"
@@ -788,10 +790,10 @@ function GroupBlock({
 
 function TypingDots() {
   return (
-    <span className="inline-flex items-center gap-0.5">
-      <span className="size-1 animate-bounce rounded-full bg-current [animation-delay:-200ms]" />
-      <span className="size-1 animate-bounce rounded-full bg-current [animation-delay:-100ms]" />
-      <span className="size-1 animate-bounce rounded-full bg-current" />
+    <span className="inline-flex items-center gap-0.5" aria-hidden>
+      <span className="size-1 animate-pulse rounded-full bg-current opacity-70 [animation-delay:-300ms]" />
+      <span className="size-1 animate-pulse rounded-full bg-current opacity-70 [animation-delay:-150ms]" />
+      <span className="size-1 animate-pulse rounded-full bg-current opacity-70" />
     </span>
   )
 }
@@ -991,7 +993,12 @@ function Bubble({
                   if (e.key === "Escape") setEditing(false)
                 }}
                 rows={2}
-                autoFocus
+                ref={(node) => {
+                  if (node) {
+                    node.focus()
+                    node.setSelectionRange(node.value.length, node.value.length)
+                  }
+                }}
                 className="resize-none rounded bg-background/30 px-2 py-1 text-foreground focus:outline-none"
               />
               <div className="flex justify-end gap-2 text-[11px]">
@@ -1275,16 +1282,20 @@ function GroupSettingsDialog({
         <div className="space-y-4">
           {isAdmin ? (
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">
+              <Label
+                htmlFor="group-name"
+                className="text-xs text-muted-foreground"
+              >
                 Name
-              </label>
+              </Label>
               <div className="flex gap-2">
-                <input
+                <Input
+                  id="group-name"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   maxLength={80}
                   placeholder="(no name)"
-                  className="flex-1 rounded-md border border-border bg-transparent px-3 py-2 text-sm focus:ring-1 focus:ring-ring focus:outline-none"
+                  className="flex-1"
                 />
                 <Button size="sm" disabled={busy} onClick={rename}>
                   Save
@@ -1301,9 +1312,9 @@ function GroupSettingsDialog({
           )}
 
           <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">
+            <Label className="text-xs text-muted-foreground">
               Members ({conversation.members.length})
-            </label>
+            </Label>
             <ul className="divide-y divide-border rounded-md border border-border">
               {conversation.members.map((m) => (
                 <li
@@ -1355,14 +1366,17 @@ function GroupSettingsDialog({
 
           {isAdmin && (
             <div className="space-y-2">
-              <label className="text-xs font-medium text-muted-foreground">
+              <Label
+                htmlFor="group-add-member"
+                className="text-xs text-muted-foreground"
+              >
                 Add member
-              </label>
-              <input
+              </Label>
+              <Input
+                id="group-add-member"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                placeholder="search by handle or name"
-                className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm focus:ring-1 focus:ring-ring focus:outline-none"
+                placeholder="Search by handle or name"
               />
               {results.length > 0 && (
                 <ul className="divide-y divide-border rounded-md border border-border">
@@ -1427,8 +1441,8 @@ function InviteSection({ conversationId }: { conversationId: string }) {
   const [copied, setCopied] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
-    const { invites } = await api.dmInvites(conversationId)
-    setInvites(invites)
+    const { invites: next } = await api.dmInvites(conversationId)
+    setInvites(next)
   }, [conversationId])
 
   useEffect(() => {

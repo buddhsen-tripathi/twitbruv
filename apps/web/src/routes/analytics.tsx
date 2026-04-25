@@ -3,7 +3,6 @@ import {
   IconArticle,
   IconBolt,
   IconBookmark,
-  IconCalendar,
   IconEye,
   IconHeart,
   IconMessageCircle,
@@ -15,8 +14,17 @@ import {
   IconUsers,
 } from "@tabler/icons-react"
 import { useEffect, useMemo, useState } from "react"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select"
 import { api } from "../lib/api"
 import { authClient } from "../lib/auth"
+import { PageFrame } from "../components/page-frame"
+import { PageError, PageHeader, PageLoading } from "../components/page-surface"
 import type { ReactNode } from "react"
 import type { AnalyticsOverview, Post } from "../lib/api"
 
@@ -122,58 +130,62 @@ function Analytics() {
       .catch((e) => setError(e instanceof Error ? e.message : "failed to load"))
   }, [session, days])
 
+  return (
+    <PageFrame>
+      <main>
+        <PageHeader
+          title="Analytics"
+          description={
+            data
+              ? `Window from ${formatPeriodStart(data.period.since)} · ${data.period.days} days · Free, self-reported only`
+              : "Free, self-reported only"
+          }
+          action={
+            <Select
+              value={String(days)}
+              onValueChange={(v) => setDays(Number(v))}
+            >
+              <SelectTrigger size="sm" className="h-8 w-full min-w-[8rem] sm:w-auto">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7">Last 7 days</SelectItem>
+                <SelectItem value="28">Last 28 days</SelectItem>
+                <SelectItem value="90">Last 90 days</SelectItem>
+              </SelectContent>
+            </Select>
+          }
+        />
+
+        {error && <PageError message={error} />}
+        {!data && !error && <PageLoading label="Loading…" />}
+
+        {data ? <AnalyticsLoaded data={data} days={days} /> : null}
+      </main>
+    </PageFrame>
+  )
+}
+
+function AnalyticsLoaded({
+  data,
+  days,
+}: {
+  data: AnalyticsOverview
+  days: number
+}) {
   const followerSeries = useDenseDailySeries(
-    data?.followerGrowth.map((p) => ({ day: p.day, n: p.newFollowers })) ?? [],
-    data?.period.days ?? days
+    data.followerGrowth.map((p) => ({ day: p.day, n: p.newFollowers })),
+    data.period.days || days
   )
   const impressionSeries = useDenseDailySeries(
-    data?.impressionsByDay.map((p) => ({ day: p.day, n: p.count })) ?? [],
-    data?.period.days ?? days
+    data.impressionsByDay.map((p) => ({ day: p.day, n: p.count })),
+    data.period.days || days
   )
 
-  const engagementTotal = data?.totals.engagements ?? 0
+  const engagementTotal = data.totals.engagements
 
   return (
-    <main>
-      <header className="flex flex-col gap-3 border-b border-border px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
-        <div className="flex gap-3">
-          <div className="mt-0.5 shrink-0 rounded-md border border-border p-2 text-muted-foreground">
-            <IconTrendingUp size={20} stroke={1.75} />
-          </div>
-          <div>
-            <h1 className="text-base font-semibold">Analytics</h1>
-            <p className="text-xs text-muted-foreground">
-              Free forever · no AI inference · self-reported only.
-            </p>
-            {data && (
-              <p className="mt-1 flex items-center gap-1.5 text-xs text-muted-foreground">
-                <IconCalendar size={14} stroke={1.75} className="shrink-0" />
-                <span>
-                  Window starts {formatPeriodStart(data.period.since)} ·{" "}
-                  {data.period.days} days
-                </span>
-              </p>
-            )}
-          </div>
-        </div>
-        <select
-          value={days}
-          onChange={(e) => setDays(Number(e.target.value))}
-          className="w-full shrink-0 rounded-md border border-border bg-transparent px-2 py-1.5 text-xs sm:w-auto"
-        >
-          <option value={7}>Last 7 days</option>
-          <option value={28}>Last 28 days</option>
-          <option value={90}>Last 90 days</option>
-        </select>
-      </header>
-
-      {error && <p className="p-4 text-sm text-destructive">{error}</p>}
-      {!data && !error && (
-        <p className="p-4 text-sm text-muted-foreground">loading…</p>
-      )}
-
-      {data && (
-        <div className="space-y-6 px-4 py-4">
+        <div className="flex flex-col gap-6 px-4 py-4">
           <section>
             <h2 className="text-sm font-semibold">Audience and reach</h2>
             <p className="text-xs text-muted-foreground">
@@ -385,8 +397,6 @@ function Analytics() {
             )}
           </section>
         </div>
-      )}
-    </main>
   )
 }
 

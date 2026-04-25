@@ -1,11 +1,14 @@
-import { Link, createFileRoute, useRouter } from "@tanstack/react-router"
+import { createFileRoute, useRouter } from "@tanstack/react-router"
 import { useCallback, useEffect, useState } from "react"
-import { IconLock, IconTrash } from "@tabler/icons-react"
+import { IconLock, IconTrash, IconX } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
+import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
 import { ApiError, api } from "../lib/api"
 import { authClient } from "../lib/auth"
 import { Avatar } from "../components/avatar"
 import { Feed } from "../components/feed"
+import { PageEmpty, PageError, PageHeader, PageLoading } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
 import type { PublicUser, UserList, UserListMember } from "../lib/api"
 
@@ -62,9 +65,7 @@ function ListDetail() {
     return (
       <PageFrame>
         <main>
-          <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-            loading…
-          </p>
+          <PageLoading />
         </main>
       </PageFrame>
     )
@@ -73,9 +74,14 @@ function ListDetail() {
     return (
       <PageFrame>
         <main>
-          <p className="px-4 py-8 text-center text-sm text-muted-foreground">
-            List not found.
-          </p>
+          {error ? (
+            <PageError message={error} />
+          ) : (
+            <PageEmpty
+              title="List not found"
+              description="It may have been deleted or you may not have access."
+            />
+          )}
         </main>
       </PageFrame>
     )
@@ -84,43 +90,33 @@ function ListDetail() {
   return (
     <PageFrame>
       <main>
-        <header className="border-b border-border px-4 py-3">
-          <div className="flex items-start justify-between gap-2">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <h1 className="truncate text-base font-semibold">
-                  {list.title}
-                </h1>
-                {list.isPrivate && (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <IconLock size={12} /> private
-                  </span>
-                )}
-              </div>
-              {list.description && (
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {list.description}
-                </p>
-              )}
-              <p className="mt-1 text-xs text-muted-foreground">
-                by{" "}
-                {list.ownerHandle ? (
-                  <Link
-                    to="/$handle"
-                    params={{ handle: list.ownerHandle }}
-                    className="hover:underline"
-                  >
-                    @{list.ownerHandle}
-                  </Link>
-                ) : (
-                  "unknown"
-                )}{" "}
-                · {list.memberCount}{" "}
-                {list.memberCount === 1 ? "member" : "members"}
-              </p>
-            </div>
-            {isOwner && (
-              <div className="flex items-center gap-1">
+        {error && <PageError message={error} className="border-b border-border" />}
+        <PageHeader
+          className="items-start"
+          title={
+            <span className="inline-flex min-w-0 items-center gap-2">
+              <span className="truncate">{list.title}</span>
+              {list.isPrivate ? (
+                <span className="inline-flex shrink-0 items-center gap-0.5 text-xs font-normal text-muted-foreground">
+                  <IconLock size={12} />
+                  Private
+                </span>
+              ) : null}
+            </span>
+          }
+          description={[
+            list.description,
+            `By ${
+              list.ownerHandle ? `@${list.ownerHandle}` : "unknown"
+            } · ${list.memberCount} ${
+              list.memberCount === 1 ? "member" : "members"
+            }`,
+          ]
+            .filter(Boolean)
+            .join(" · ")}
+          action={
+            isOwner ? (
+              <div className="flex shrink-0 items-center gap-1">
                 <Button
                   size="sm"
                   variant="ghost"
@@ -137,10 +133,9 @@ function ListDetail() {
                   <IconTrash size={14} /> Delete
                 </Button>
               </div>
-            )}
-          </div>
-          {error && <p className="mt-2 text-xs text-destructive">{error}</p>}
-        </header>
+            ) : undefined
+          }
+        />
 
         {isOwner && showAdd && (
           <ManageMembers listId={id} members={members} onChanged={refresh} />
@@ -183,9 +178,7 @@ function ManageMembers({
       try {
         const { users } = await api.search(q.trim())
         if (!cancel) setResults(users)
-      } catch {
-        /* ignore */
-      }
+      } catch {}
     }, 200)
     return () => {
       cancel = true
@@ -236,27 +229,31 @@ function ManageMembers({
               <span className="font-medium">
                 @{m.handle ?? m.id.slice(0, 6)}
               </span>
-              <button
+              <Button
+                type="button"
+                size="icon-xs"
+                variant="ghost"
                 onClick={() => remove(m.id)}
                 disabled={busy}
-                className="text-muted-foreground hover:text-destructive"
-                aria-label="remove"
+                className="shrink-0 text-muted-foreground hover:text-destructive"
+                aria-label="Remove"
               >
-                ×
-              </button>
+                <IconX size={12} stroke={2} />
+              </Button>
             </li>
           ))}
         </ul>
       )}
       <div className="mt-3">
-        <label className="text-xs font-medium text-muted-foreground">
+        <Label htmlFor="list-member-search" className="text-xs text-muted-foreground">
           Add a user
-        </label>
-        <input
+        </Label>
+        <Input
+          id="list-member-search"
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="search by handle or name"
-          className="mt-1 w-full rounded-md border border-border bg-transparent px-2 py-1 text-sm focus:ring-1 focus:ring-ring focus:outline-none"
+          placeholder="Search by handle or name"
+          className="mt-1.5 h-8 text-sm"
         />
         {results.length > 0 && (
           <ul className="mt-2 divide-y divide-border rounded-md border border-border">

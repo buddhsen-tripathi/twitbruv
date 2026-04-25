@@ -26,12 +26,12 @@ export function ClaimHandle({
     try {
       const { user } = await api.claimHandle(handle)
       if (user.handle) onClaimed(user.handle)
-    } catch (e) {
-      if (e instanceof ApiError) {
-        if (e.code === "handle_taken") setError("that handle is taken")
-        else if (e.code === "reserved_handle")
+    } catch (err) {
+      if (err instanceof ApiError) {
+        if (err.code === "handle_taken") setError("that handle is taken")
+        else if (err.code === "reserved_handle")
           setError("that handle is reserved")
-        else setError(e.message)
+        else setError(err.message)
       } else {
         setError("claim failed")
       }

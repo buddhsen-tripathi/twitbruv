@@ -87,7 +87,7 @@ function ArticleView() {
     setError(null)
     api
       .userArticleBySlug(handle, slug)
-      .then(({ article }) => setArticle(article))
+      .then(({ article: next }) => setArticle(next))
       .catch((e) => setError(e instanceof ApiError ? e.message : "not found"))
   }, [handle, slug])
 

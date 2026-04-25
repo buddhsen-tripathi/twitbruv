@@ -8,6 +8,8 @@ import {
 } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
 import { Input } from "@workspace/ui/components/input"
+import { Alert, AlertDescription } from "@workspace/ui/components/alert"
+import { PageEmpty, PageHeader, PageLoading } from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
 import { PostCard } from "../components/post-card"
 import { VerifiedBadge } from "../components/verified-badge"
@@ -25,21 +27,19 @@ export const Route = createFileRoute("/search")({
 })
 
 function Search() {
-  const navigate = Route.useNavigate()
   const { q: urlQ } = Route.useSearch()
+  return <SearchInner key={urlQ ?? ""} initialQuery={urlQ ?? ""} />
+}
+
+function SearchInner({ initialQuery }: { initialQuery: string }) {
+  const navigate = Route.useNavigate()
   const { me } = useMe()
-  const [draft, setDraft] = useState(() =>
-    typeof urlQ === "string" ? urlQ : "",
-  )
+  const [draft, setDraft] = useState(initialQuery)
   const [users, setUsers] = useState<Array<PublicUser>>([])
   const [posts, setPosts] = useState<Array<Post>>([])
   const [loading, setLoading] = useState(false)
   const [saved, setSaved] = useState<Array<SavedSearch>>([])
   const [savedError, setSavedError] = useState<string | null>(null)
-
-  useEffect(() => {
-    setDraft(typeof urlQ === "string" ? urlQ : "")
-  }, [urlQ])
 
   const query = draft.trim()
   const activeSavedId = saved.find((s) => s.query === query)?.id ?? null
@@ -128,56 +128,66 @@ function Search() {
   return (
     <PageFrame>
       <main>
-        <header className="border-b border-border px-4 py-3">
-          <form onSubmit={onSubmit} className="relative flex-1">
-            <IconSearch
-              size={14}
-              stroke={1.75}
-              className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-muted-foreground"
-            />
-            <Input
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-              placeholder='search people and posts… try "from:lucas has:media"'
-              className="pl-7"
-              aria-label="search"
-            />
-          </form>
-          {me && query.length >= 2 && (
-            <div className="mt-2 flex items-center justify-between text-xs">
-              <button
-                type="button"
-                onClick={toggleSaved}
-                className="flex items-center gap-1 text-primary hover:underline"
-                aria-pressed={Boolean(activeSavedId)}
-              >
-                {activeSavedId ? (
-                  <IconBookmarkFilled size={14} stroke={1.75} />
-                ) : (
-                  <IconBookmark size={14} stroke={1.75} />
-                )}
-                <span>{activeSavedId ? "Saved" : "Save this search"}</span>
-              </button>
-              <details className="text-muted-foreground">
-                <summary className="cursor-pointer select-none">Operators</summary>
-                <div className="mt-1 max-w-md text-right text-[11px] leading-snug">
-                  <code>from:user</code> · <code>to:user</code> ·{" "}
-                  <code>has:media</code> · <code>has:link</code> ·{" "}
-                  <code>has:poll</code> · <code>lang:en</code> ·{" "}
-                  <code>since:YYYY-MM-DD</code> · <code>until:YYYY-MM-DD</code>{" "}
-                  · <code>min_likes:10</code> · <code>min_replies:5</code>
-                </div>
-              </details>
+        <div className="border-b border-border">
+          <PageHeader title="Search" className="border-0" />
+          <form onSubmit={onSubmit} className="px-4 pb-3">
+            <div className="relative">
+              <IconSearch
+                size={14}
+                stroke={1.75}
+                className="pointer-events-none absolute top-1/2 left-2 -translate-y-1/2 text-muted-foreground"
+              />
+              <Input
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
+                placeholder='Search people and posts. Try "from:lucas has:media".'
+                className="pl-7"
+                aria-label="search"
+              />
             </div>
-          )}
-          {savedError && (
-            <p className="mt-1 text-xs text-destructive">{savedError}</p>
-          )}
-        </header>
+            {me && query.length >= 2 && (
+              <div className="mt-2 flex items-center justify-between gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={toggleSaved}
+                  className="text-primary hover:underline"
+                  aria-pressed={Boolean(activeSavedId)}
+                >
+                  {activeSavedId ? (
+                    <span className="inline-flex items-center gap-1">
+                      <IconBookmarkFilled size={14} stroke={1.75} />
+                      Saved
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1">
+                      <IconBookmark size={14} stroke={1.75} />
+                      Save this search
+                    </span>
+                  )}
+                </button>
+                <details className="text-muted-foreground">
+                  <summary className="cursor-pointer select-none">Operators</summary>
+                  <div className="mt-1 max-w-md text-right text-[11px] leading-snug">
+                    <code>from:user</code> · <code>to:user</code> ·{" "}
+                    <code>has:media</code> · <code>has:link</code> ·{" "}
+                    <code>has:poll</code> · <code>lang:en</code> ·{" "}
+                    <code>since:YYYY-MM-DD</code> · <code>until:YYYY-MM-DD</code>{" "}
+                    · <code>min_likes:10</code> · <code>min_replies:5</code>
+                  </div>
+                </details>
+              </div>
+            )}
+            {savedError && (
+              <Alert variant="destructive" className="mt-2 text-left">
+                <AlertDescription className="text-xs">{savedError}</AlertDescription>
+              </Alert>
+            )}
+          </form>
+        </div>
 
         {me && saved.length > 0 && (
           <section className="border-b border-border px-4 py-2">
-            <h2 className="mb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            <h2 className="mb-1 text-xs font-medium text-muted-foreground">
               Saved searches
             </h2>
             <div className="flex flex-wrap gap-1.5">
@@ -217,17 +227,16 @@ function Search() {
 
         {query.length < 2 ? (
           <p className="px-4 py-6 text-sm text-muted-foreground">
-            enter at least 2 characters to search people and posts. operators
-            like <code>from:</code>, <code>has:media</code>, and{" "}
-            <code>since:</code> are also supported.
+            Enter at least 2 characters. Operators like <code>from:</code>,{" "}
+            <code>has:media</code>, and <code>since:</code> are supported.
           </p>
         ) : loading ? (
-          <p className="px-4 py-6 text-sm text-muted-foreground">searching…</p>
+          <PageLoading label="Searching…" />
         ) : (
           <>
             {users.length > 0 && (
               <section className="border-b border-border">
-                <h2 className="px-4 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                <h2 className="px-4 py-2 text-xs font-medium text-muted-foreground">
                   People
                 </h2>
                 {users.map((u) =>
@@ -261,7 +270,7 @@ function Search() {
             )}
             {posts.length > 0 && (
               <section>
-                <h2 className="px-4 py-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                <h2 className="px-4 py-2 text-xs font-medium text-muted-foreground">
                   Posts
                 </h2>
                 {posts.map((p) => (
@@ -270,9 +279,11 @@ function Search() {
               </section>
             )}
             {users.length === 0 && posts.length === 0 && (
-              <p className="px-4 py-6 text-sm text-muted-foreground">
-                no matches.
-              </p>
+              <PageEmpty
+                title="No matches"
+                description="Try a different term or a search operator from the help above."
+                className="py-8"
+              />
             )}
           </>
         )}

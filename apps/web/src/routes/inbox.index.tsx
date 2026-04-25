@@ -2,10 +2,20 @@ import { Link, createFileRoute } from "@tanstack/react-router"
 import { useEffect, useState } from "react"
 import { IconPencilPlus } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
+import { Badge } from "@workspace/ui/components/badge"
 import { Skeleton, SkeletonAvatar } from "@workspace/ui/components/skeleton"
 import { api } from "../lib/api"
 import { Avatar } from "../components/avatar"
+import {
+  PageEmpty,
+  PageError,
+  PageHeader,
+} from "../components/page-surface"
 import { PageFrame } from "../components/page-frame"
+import {
+  UnderlineTabButton,
+  UnderlineTabRow,
+} from "../components/underline-tab-row"
 import { VerifiedBadge } from "../components/verified-badge"
 import { subscribeToDmStream } from "../lib/dm-stream"
 import type { DmConversation, DmMember } from "../lib/api"
@@ -16,9 +26,67 @@ type Folder = "inbox" | "requests"
 
 function InboxList() {
   const [folder, setFolder] = useState<Folder>("inbox")
+  const [requestCount, setRequestCount] = useState(0)
+
+  return (
+    <PageFrame>
+      <main>
+        <PageHeader
+          sticky
+          title="Messages"
+          action={
+            <Button
+              size="sm"
+              variant="outline"
+              nativeButton={false}
+              render={<Link to="/inbox/new" />}
+            >
+              <IconPencilPlus size={14} stroke={1.75} />
+              New
+            </Button>
+          }
+        />
+        <UnderlineTabRow>
+          <UnderlineTabButton
+            active={folder === "inbox"}
+            onClick={() => setFolder("inbox")}
+          >
+            Inbox
+          </UnderlineTabButton>
+          <UnderlineTabButton
+            active={folder === "requests"}
+            onClick={() => setFolder("requests")}
+          >
+            <span className="inline-flex items-center justify-center gap-2">
+              Requests
+              {requestCount > 0 ? (
+                <Badge variant="secondary" className="tabular-nums">
+                  {requestCount}
+                </Badge>
+              ) : null}
+            </span>
+          </UnderlineTabButton>
+        </UnderlineTabRow>
+
+        <ConversationList
+          key={folder}
+          folder={folder}
+          onRequestCount={setRequestCount}
+        />
+      </main>
+    </PageFrame>
+  )
+}
+
+function ConversationList({
+  folder,
+  onRequestCount,
+}: {
+  folder: Folder
+  onRequestCount: (count: number) => void
+}) {
   const [conversations, setConversations] =
     useState<Array<DmConversation> | null>(null)
-  const [requestCount, setRequestCount] = useState(0)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -28,139 +96,65 @@ function InboxList() {
         const res = await api.dmConversations(folder)
         if (cancel) return
         setConversations(res.conversations)
-        setRequestCount(res.requestCount)
+        onRequestCount(res.requestCount)
       } catch (e) {
         if (!cancel) setError(e instanceof Error ? e.message : "failed to load")
       }
     }
     load()
-    // Refresh the whole list on any DM event. The list query is cheap, and this keeps the
-    // unread counts + last-message previews in lock-step with the stream.
     const unsubscribe = subscribeToDmStream(() => load())
-    // Slow reconcile as a fallback if the stream stalls silently.
     const iv = setInterval(load, 120_000)
     return () => {
       cancel = true
       clearInterval(iv)
       unsubscribe()
     }
-  }, [folder])
+  }, [folder, onRequestCount])
 
-  // Reset list state when the user switches tabs so the loading skeleton shows briefly
-  // instead of stale content from the other folder.
-  useEffect(() => {
-    setConversations(null)
-  }, [folder])
-
-  return (
-    <PageFrame>
-      <main>
-        <header className="sticky top-0 z-10 flex items-center justify-between border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm">
-          <h1 className="text-base font-semibold">Messages</h1>
-          <Button
-            size="sm"
-            variant="outline"
-            nativeButton={false}
-            render={<Link to="/inbox/new" />}
+  if (error) return <PageError message={error} />
+  if (!conversations) {
+    return (
+      <ul>
+        {Array.from({ length: 6 }).map((_, i) => (
+          <li
+            key={i}
+            className="flex items-start gap-3 border-b border-border px-4 py-3"
           >
-            <IconPencilPlus size={14} stroke={1.75} />
-            New
-          </Button>
-        </header>
-
-        <div className="flex border-b border-border text-sm">
-          <FolderTab
-            active={folder === "inbox"}
-            onClick={() => setFolder("inbox")}
-            label="Inbox"
-          />
-          <FolderTab
-            active={folder === "requests"}
-            onClick={() => setFolder("requests")}
-            label="Requests"
-            badge={requestCount}
-          />
-        </div>
-
-        {error && <p className="p-4 text-sm text-destructive">{error}</p>}
-        {!conversations && !error && (
-          <ul>
-            {Array.from({ length: 6 }).map((_, i) => (
-              <li
-                key={i}
-                className="flex items-start gap-3 border-b border-border px-4 py-3"
-              >
-                <SkeletonAvatar />
-                <div className="flex-1 space-y-2">
-                  <div className="flex justify-between">
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-3 w-12" />
-                  </div>
-                  <Skeleton className="h-3 w-3/4" />
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
-        {conversations && conversations.length === 0 && (
-          <div className="px-4 py-16 text-center">
-            <p className="text-sm font-semibold">
-              {folder === "requests"
-                ? "No message requests"
-                : "No conversations yet"}
-            </p>
-            <p className="mt-1 text-xs text-muted-foreground">
-              {folder === "requests" ? (
-                "When someone you don't follow messages you, it'll appear here."
-              ) : (
-                <>
-                  Tap <span className="font-medium">New</span> above, or open
-                  someone's profile and tap the message icon.
-                </>
-              )}
-            </p>
-          </div>
-        )}
-        {conversations && conversations.length > 0 && (
-          <ul>
-            {conversations.map((c) => (
-              <ConversationRow key={c.id} conversation={c} />
-            ))}
-          </ul>
-        )}
-      </main>
-    </PageFrame>
-  )
-}
-
-function FolderTab({
-  active,
-  onClick,
-  label,
-  badge,
-}: {
-  active: boolean
-  onClick: () => void
-  label: string
-  badge?: number
-}) {
+            <SkeletonAvatar />
+            <div className="flex-1 space-y-2">
+              <div className="flex justify-between">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-12" />
+              </div>
+              <Skeleton className="h-3 w-3/4" />
+            </div>
+          </li>
+        ))}
+      </ul>
+    )
+  }
+  if (conversations.length === 0) {
+    return (
+      <PageEmpty
+        title={
+          folder === "requests"
+            ? "No message requests"
+            : "No conversations yet"
+        }
+        description={
+          folder === "requests"
+            ? "When someone you don't follow messages you, it'll appear here."
+            : "Use New above, or open a profile and use the message action."
+        }
+      />
+    )
+  }
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex flex-1 items-center justify-center gap-2 px-4 py-3 text-sm transition-colors ${
-        active
-          ? "border-b-2 border-primary font-semibold text-foreground"
-          : "text-muted-foreground hover:text-foreground"
-      }`}
-    >
-      {label}
-      {badge !== undefined && badge > 0 && (
-        <span className="rounded-full bg-primary px-2 py-0.5 text-[10px] font-semibold text-primary-foreground">
-          {badge}
-        </span>
-      )}
-    </button>
+    <ul>
+      {conversations.map((c) => (
+        <ConversationRow key={c.id} conversation={c} />
+      ))}
+    </ul>
   )
 }
 

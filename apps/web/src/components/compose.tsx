@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { IconChartBar, IconPhoto, IconUsers, IconX } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
+import { Input } from "@workspace/ui/components/input"
+import { Label } from "@workspace/ui/components/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@workspace/ui/components/select"
+import { Switch } from "@workspace/ui/components/switch"
+import { Textarea } from "@workspace/ui/components/textarea"
 import {
   POLL_MAX_OPTIONS,
   POLL_MIN_OPTIONS,
@@ -17,10 +28,25 @@ import type { UploadedMedia } from "../lib/media"
 
 const MAX_ATTACHMENTS = 4
 
+interface PollOption {
+  id: string
+  value: string
+}
+
 interface PollDraft {
-  options: Array<string>
+  options: Array<PollOption>
   durationMinutes: number
   allowMultiple: boolean
+}
+
+function createPollOption(value = ""): PollOption {
+  return {
+    id:
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    value,
+  }
 }
 
 const POLL_DURATION_CHOICES: Array<{ label: string; minutes: number }> = [
@@ -91,9 +117,9 @@ export function Compose({
     .map((a) => a.media!.id)
   const pollValid =
     !poll ||
-    (poll.options.filter((o) => o.trim().length > 0).length >=
+    (poll.options.filter((o) => o.value.trim().length > 0).length >=
       POLL_MIN_OPTIONS &&
-      poll.options.every((o) => o.length <= POLL_OPTION_MAX_LEN))
+      poll.options.every((o) => o.value.length <= POLL_OPTION_MAX_LEN))
   const hasContent =
     text.trim().length > 0 ||
     readyMediaIds.length > 0 ||
@@ -105,27 +131,32 @@ export function Compose({
 
   function startPoll() {
     if (poll) return
-    // Polls and media are mutually exclusive (matches Twitter / Mastodon).
     setPoll({
-      options: ["", ""],
+      options: [createPollOption(), createPollOption()],
       durationMinutes: 60 * 24,
       allowMultiple: false,
     })
   }
-  function updatePollOption(idx: number, value: string) {
+  function updatePollOption(id: string, value: string) {
     if (!poll) return
-    const next = [...poll.options]
-    next[idx] = value
-    setPoll({ ...poll, options: next })
+    setPoll({
+      ...poll,
+      options: poll.options.map((opt) =>
+        opt.id === id ? { ...opt, value } : opt
+      ),
+    })
   }
   function addPollOption() {
     if (!poll || poll.options.length >= POLL_MAX_OPTIONS) return
-    setPoll({ ...poll, options: [...poll.options, ""] })
+    setPoll({ ...poll, options: [...poll.options, createPollOption()] })
   }
-  function removePollOption(idx: number) {
+  function removePollOption(id: string) {
     if (!poll) return
     if (poll.options.length <= POLL_MIN_OPTIONS) return
-    setPoll({ ...poll, options: poll.options.filter((_, i) => i !== idx) })
+    setPoll({
+      ...poll,
+      options: poll.options.filter((opt) => opt.id !== id),
+    })
   }
 
   async function addFiles(files: FileList | null) {
@@ -190,7 +221,7 @@ export function Compose({
       const pollPayload: PollInput | undefined = poll
         ? {
             options: poll.options
-              .map((o) => o.trim())
+              .map((o) => o.value.trim())
               .filter((o) => o.length > 0),
             durationMinutes: poll.durationMinutes,
             allowMultiple: poll.allowMultiple,
@@ -211,8 +242,8 @@ export function Compose({
       setPoll(null)
       if (collapsible) setExpanded(false)
       onCreated?.(post)
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "failed to post")
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "failed to post")
     } finally {
       setLoading(false)
     }
@@ -248,13 +279,13 @@ export function Compose({
         )}
       </div>
       <div className="min-w-0 flex-1">
-        <textarea
+        <Textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
           onFocus={() => setExpanded(true)}
           placeholder={placeholder}
           rows={expanded ? 3 : 1}
-          className="w-full resize-none bg-transparent text-[15px] leading-relaxed placeholder:text-muted-foreground focus:outline-none"
+          className="border-0 bg-transparent px-0 py-0 text-[15px] leading-relaxed shadow-none focus-visible:ring-0"
         />
 
         {quoted && (
@@ -276,33 +307,35 @@ export function Compose({
         )}
 
         {poll && (
-          <div className="mt-3 space-y-2 rounded-md border border-border p-3">
+          <div className="mt-3 flex flex-col gap-2 rounded-md border border-border p-3">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              <span className="text-xs font-medium text-muted-foreground">
                 Poll
               </span>
-              <button
+              <Button
                 type="button"
+                variant="ghost"
+                size="sm"
                 onClick={() => setPoll(null)}
-                className="text-xs text-muted-foreground hover:text-foreground"
+                className="h-auto p-0 text-xs text-muted-foreground hover:text-foreground"
               >
-                Remove poll
-              </button>
+                Remove
+              </Button>
             </div>
             {poll.options.map((opt, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <input
-                  value={opt}
-                  onChange={(e) => updatePollOption(idx, e.target.value)}
+              <div key={opt.id} className="flex items-center gap-2">
+                <Input
+                  value={opt.value}
+                  onChange={(e) => updatePollOption(opt.id, e.target.value)}
                   placeholder={`Choice ${idx + 1}`}
                   maxLength={POLL_OPTION_MAX_LEN}
-                  className="flex-1 rounded-md border border-border bg-transparent px-2 py-1 text-sm focus:ring-1 focus:ring-ring focus:outline-none"
+                  className="h-8 flex-1 text-sm"
                 />
                 {poll.options.length > POLL_MIN_OPTIONS && (
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    onClick={() => removePollOption(idx)}
+                    onClick={() => removePollOption(opt.id)}
                     aria-label="remove option"
                   >
                     <IconX size={14} />
@@ -314,43 +347,47 @@ export function Compose({
               <Button
                 variant="ghost"
                 size="sm"
+                type="button"
                 onClick={addPollOption}
-                className="text-xs"
+                className="h-auto w-fit p-0 text-xs"
               >
-                + Add choice
+                Add choice
               </Button>
             )}
-            <div className="flex flex-wrap items-center gap-3 pt-1 text-xs text-muted-foreground">
-              <label className="flex items-center gap-1">
-                <span>Duration</span>
-                <select
-                  value={poll.durationMinutes}
-                  onChange={(e) =>
-                    setPoll({
-                      ...poll,
-                      durationMinutes: Number(e.target.value),
-                    })
+            <div className="flex flex-col gap-2 pt-1 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 flex-1 items-center gap-2">
+                <Label className="shrink-0 text-xs text-muted-foreground">
+                  Duration
+                </Label>
+                <Select
+                  value={String(poll.durationMinutes)}
+                  onValueChange={(v) =>
+                    setPoll({ ...poll, durationMinutes: Number(v) })
                   }
-                  className="rounded-md border border-border bg-background px-1 py-0.5 text-xs"
                 >
-                  {POLL_DURATION_CHOICES.map((c) => (
-                    <option key={c.minutes} value={c.minutes}>
-                      {c.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label className="flex items-center gap-1">
-                <input
-                  type="checkbox"
+                  <SelectTrigger size="sm" className="h-7 min-w-0 flex-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {POLL_DURATION_CHOICES.map((c) => (
+                      <SelectItem key={c.minutes} value={String(c.minutes)}>
+                        {c.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex items-center gap-2">
+                <Label htmlFor="poll-multi" className="text-xs text-muted-foreground">
+                  Multiple choice
+                </Label>
+                <Switch
+                  id="poll-multi"
                   checked={poll.allowMultiple}
-                  onChange={(e) =>
-                    setPoll({ ...poll, allowMultiple: e.target.checked })
-                  }
-                  className="size-3.5 accent-primary"
+                  onCheckedChange={(v) => setPoll({ ...poll, allowMultiple: v })}
+                  size="sm"
                 />
-                Allow multiple choices
-              </label>
+              </div>
             </div>
           </div>
         )}
@@ -358,7 +395,7 @@ export function Compose({
         {attachments.length > 0 && (
           <div className="mt-2 grid grid-cols-2 gap-2">
             {attachments.map((a) => (
-              <div key={a.tempId} className="space-y-1">
+              <div key={a.tempId} className="flex flex-col gap-1">
                 <div className="relative aspect-square overflow-hidden rounded-md border border-border bg-muted">
                   <img
                     src={a.previewUrl}
@@ -384,7 +421,7 @@ export function Compose({
                     <IconX size={14} />
                   </Button>
                 </div>
-                <input
+                <Input
                   value={a.altText}
                   onChange={(e) =>
                     setAttachments((prev) =>
@@ -396,9 +433,9 @@ export function Compose({
                     )
                   }
                   disabled={a.status !== "ready"}
-                  placeholder="Describe for screen readers"
+                  placeholder="Alt text (screen readers)"
                   maxLength={1000}
-                  className="w-full rounded-md border border-border bg-transparent px-2 py-1 text-xs focus:ring-1 focus:ring-ring focus:outline-none disabled:opacity-50"
+                  className="h-7 text-xs disabled:opacity-50"
                 />
               </div>
             ))}
@@ -446,32 +483,39 @@ export function Compose({
                 <IconChartBar size={18} stroke={1.75} />
               </Button>
               {showReplyControl && (
-                <label
-                  className="flex items-center gap-1.5 rounded-md border border-transparent px-1.5 py-0.5 text-xs text-muted-foreground hover:border-border hover:text-foreground"
-                  title="Who can reply to this post"
+                <div
+                  className="flex min-w-0 max-w-[min(100%,12rem)] items-center gap-1.5"
+                  title="Who can reply"
                 >
-                  <IconUsers size={14} stroke={1.75} />
-                  <select
+                  <IconUsers
+                    className="size-3.5 shrink-0 text-muted-foreground"
+                    stroke={1.75}
+                  />
+                  <Select
                     value={replyRestriction}
-                    onChange={(e) =>
+                    onValueChange={(v) =>
                       setReplyRestriction(
-                        e.target.value as "anyone" | "following" | "mentioned"
+                        v as "anyone" | "following" | "mentioned"
                       )
                     }
-                    className="bg-transparent text-xs focus:outline-none"
                   >
-                    <option value="anyone">Everyone can reply</option>
-                    <option value="following">People you follow</option>
-                    <option value="mentioned">Only people you mention</option>
-                  </select>
-                </label>
+                    <SelectTrigger size="sm" className="h-7 min-w-0 flex-1 text-xs">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="anyone">Everyone can reply</SelectItem>
+                      <SelectItem value="following">People you follow</SelectItem>
+                      <SelectItem value="mentioned">Only people you @mention</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
               )}
               <span
-                className={`text-xs ${
+                className={`text-xs tabular-nums ${
                   remaining < 0
                     ? "text-destructive"
                     : remaining < 20
-                      ? "text-amber-600"
+                      ? "text-foreground/80"
                       : "text-muted-foreground"
                 }`}
               >
