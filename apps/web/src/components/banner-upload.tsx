@@ -44,7 +44,7 @@ export function BannerUpload({
           {currentUrl && !uploading && (
             <Button
               variant="ghost"
-              size="icon"
+              size="sm"
               onClick={() => onChange(null)}
               className="text-destructive hover:underline"
             >
