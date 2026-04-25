@@ -59,6 +59,7 @@ function Landing() {
           to: "/",
           search: { postId: post.id, postHandle: handle },
           replace: Boolean(selectedThread),
+          resetScroll: false,
         })
         return
       }
@@ -71,7 +72,7 @@ function Landing() {
     [isDesktop, navigate, selectedThread]
   )
   const closeThread = useCallback(() => {
-    navigate({ to: "/", search: {}, replace: true })
+    navigate({ to: "/", search: {}, replace: true, resetScroll: false })
   }, [navigate])
 
   useEffect(() => {
