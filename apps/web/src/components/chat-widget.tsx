@@ -240,10 +240,20 @@ function ChatView({
   const [loading, setLoading] = useState(true)
   const [text, setText] = useState("")
   const [sending, setSending] = useState(false)
-  const [uploading, setUploading] = useState(false)
+  const [pending, setPending] = useState<{
+    file: File
+    previewUrl: string
+  } | null>(null)
+  const [dragOver, setDragOver] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    return () => {
+      if (pending) URL.revokeObjectURL(pending.previewUrl)
+    }
+  }, [pending])
 
   const title = conversation.title || defaultTitle(conversation)
 
@@ -286,15 +296,23 @@ function ChatView({
 
   async function handleSend(e: React.FormEvent) {
     e.preventDefault()
-    if (!text.trim() || sending) return
+    const trimmed = text.trim()
+    if ((!trimmed && !pending) || sending) return
 
     setSending(true)
     try {
+      let mediaId: string | undefined
+      if (pending) {
+        const media = await uploadImage(pending.file)
+        mediaId = media.id
+      }
       const { message } = await api.dmSend(conversation.id, {
-        text: text.trim(),
+        text: trimmed || undefined,
+        mediaId,
       })
       setMessages((prev) => [...prev, message])
       setText("")
+      clearPending()
       inputRef.current?.focus()
     } catch {
       // ignore
@@ -303,27 +321,52 @@ function ChatView({
     }
   }
 
-  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    if (!file || !file.type.startsWith("image/")) return
-    e.target.value = ""
+  function attachFile(file: File) {
+    if (!file.type.startsWith("image/")) return
+    if (pending) URL.revokeObjectURL(pending.previewUrl)
+    setPending({ file, previewUrl: URL.createObjectURL(file) })
+  }
 
-    setUploading(true)
-    try {
-      const media = await uploadImage(file)
-      const { message } = await api.dmSend(conversation.id, {
-        mediaId: media.id,
-      })
-      setMessages((prev) => [...prev, message])
-    } catch {
-      // ignore
-    } finally {
-      setUploading(false)
-    }
+  function clearPending() {
+    if (pending) URL.revokeObjectURL(pending.previewUrl)
+    setPending(null)
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ""
+    if (file) attachFile(file)
+  }
+
+  function onDragOver(e: React.DragEvent) {
+    if (sending) return
+    if (!Array.from(e.dataTransfer.types).includes("Files")) return
+    e.preventDefault()
+    setDragOver(true)
+  }
+  function onDragLeave(e: React.DragEvent) {
+    if (e.currentTarget.contains(e.relatedTarget as Node | null)) return
+    setDragOver(false)
+  }
+  function onDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragOver(false)
+    const file = e.dataTransfer.files.item(0)
+    if (file) attachFile(file)
   }
 
   return (
-    <div className="flex h-[32rem] max-h-[calc(100vh-6rem)] flex-col">
+    <div
+      className="relative flex h-[32rem] max-h-[calc(100vh-6rem)] flex-col"
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+    >
+      {dragOver && (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-md border-2 border-dashed border-primary bg-primary/10 text-sm font-medium text-foreground">
+          Drop image to attach
+        </div>
+      )}
       <header className="flex items-center gap-2 border-b border-border px-3 py-2.5">
         <Button size="icon-sm" variant="ghost" onClick={onBack}>
           <IconArrowLeft size={18} />
@@ -355,6 +398,28 @@ function ChatView({
         )}
       </div>
 
+      {pending && (
+        <div className="flex items-center gap-2 border-t border-border px-3 py-2">
+          <div className="relative">
+            <img
+              src={pending.previewUrl}
+              alt="attachment preview"
+              className="size-14 rounded-md border border-border object-cover"
+            />
+            <button
+              type="button"
+              onClick={clearPending}
+              aria-label="remove attachment"
+              className="absolute -top-1.5 -right-1.5 flex size-5 items-center justify-center rounded-full bg-background text-foreground shadow-sm ring-1 ring-border hover:bg-muted"
+            >
+              <IconX size={12} stroke={2} />
+            </button>
+          </div>
+          <span className="text-xs text-muted-foreground">
+            {sending ? "sending…" : "attached"}
+          </span>
+        </div>
+      )}
       <form
         onSubmit={handleSend}
         className="flex items-center gap-1 border-t border-border px-2 py-2"
@@ -371,7 +436,7 @@ function ChatView({
           size="icon-sm"
           variant="ghost"
           onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
+          disabled={sending}
         >
           <IconPhoto size={18} />
         </Button>
@@ -380,15 +445,15 @@ function ChatView({
           type="text"
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder={uploading ? "uploading..." : "Message..."}
-          disabled={uploading}
+          placeholder={pending ? "Add a caption…" : "Message..."}
+          disabled={sending}
           className="flex-1 bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
         />
         <Button
           type="submit"
           size="icon-sm"
           variant="ghost"
-          disabled={!text.trim() || sending || uploading}
+          disabled={(!text.trim() && !pending) || sending}
         >
           <IconSend size={18} />
         </Button>
