@@ -10,7 +10,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hono/zod-openapi": "^1.3.0",
     "@workspace/auth": "workspace:*",
     "@workspace/db": "workspace:*",
     "@workspace/email": "workspace:*",

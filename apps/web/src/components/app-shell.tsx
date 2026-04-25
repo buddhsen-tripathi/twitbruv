@@ -3,11 +3,9 @@ import {
   IconBell,
   IconBookmark,
   IconHome,
-  IconLogin,
   IconMail,
   IconPencil,
   IconSearch,
-  IconUserPlus,
 } from "@tabler/icons-react"
 import {
   Sidebar,
@@ -25,9 +23,11 @@ import {
 import { TooltipProvider } from "@workspace/ui/components/tooltip"
 import { authClient } from "../lib/auth"
 import { api } from "../lib/api"
+import { APP_NAME } from "../lib/env"
 import { subscribeToDmStream } from "../lib/dm-stream"
 import { useMe } from "../lib/me"
 import { AppHeader } from "./app-header"
+import { PublicShell } from "./public-shell"
 import { UserNav } from "./user-nav"
 import { ComposeFab } from "./compose-fab"
 import type { ReactNode } from "react"
@@ -39,6 +39,10 @@ export function AppShell({ children }: { children: ReactNode }) {
   const unread = useUnreadNotifications(Boolean(session))
   const dmUnread = useUnreadDms(Boolean(session))
 
+  // Render the lightweight public shell while we don't have a confirmed session. This covers
+  // SSR (no session yet), the brief client hydration window, and any time the user is logged out.
+  if (isPending || !session) return <PublicShell>{children}</PublicShell>
+
   return (
     <TooltipProvider>
       <SidebarProvider>
@@ -46,10 +50,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           <SidebarHeader className="p-2">
             <Link to="/" className="flex items-center gap-2">
               <div className="flex size-8 shrink-0 items-center justify-center rounded-md bg-primary text-sm font-bold text-primary-foreground">
-                t
+                {APP_NAME.slice(0, 1).toLowerCase()}
               </div>
               <span className="text-base font-semibold group-data-[collapsible=icon]:hidden">
-                twotter
+                {APP_NAME}
               </span>
             </Link>
           </SidebarHeader>
@@ -82,131 +86,74 @@ export function AppShell({ children }: { children: ReactNode }) {
                       }
                     />
                   </SidebarMenuItem>
-                  {session && (
-                    <>
-                      <SidebarMenuItem>
-                        <SidebarMenuButton
-                          size="default"
-                          tooltip="notifications"
-                          render={
-                            <Link to="/notifications">
-                              <IconBell />
-                              <span>Notifications</span>
-                              {unread > 0 && (
-                                <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground group-data-[collapsible=icon]:hidden">
-                                  {unread > 99 ? "99+" : unread}
-                                </span>
-                              )}
-                            </Link>
-                          }
-                        />
-                      </SidebarMenuItem>
-                      <SidebarMenuItem>
-                        <SidebarMenuButton
-                          size="default"
-                          tooltip="messages"
-                          render={
-                            <Link to="/inbox">
-                              <IconMail />
-                              <span>Messages</span>
-                              {dmUnread > 0 && (
-                                <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground group-data-[collapsible=icon]:hidden">
-                                  {dmUnread > 99 ? "99+" : dmUnread}
-                                </span>
-                              )}
-                            </Link>
-                          }
-                        />
-                      </SidebarMenuItem>
-                      <SidebarMenuItem>
-                        <SidebarMenuButton
-                          size="default"
-                          tooltip="bookmarks"
-                          render={
-                            <Link to="/bookmarks">
-                              <IconBookmark />
-                              <span>Bookmarks</span>
-                            </Link>
-                          }
-                        />
-                      </SidebarMenuItem>
-                      <SidebarMenuItem>
-                        <SidebarMenuButton
-                          size="default"
-                          tooltip="write article"
-                          render={
-                            <Link to="/articles/new">
-                              <IconPencil />
-                              <span>Write Article</span>
-                            </Link>
-                          }
-                        />
-                      </SidebarMenuItem>
-                      {/* {me?.handle && (
-                        <SidebarMenuItem>
-                          <SidebarMenuButton
-                            size="default"
-                            tooltip="profile"
-                            render={
-                              <Link
-                                to="/$handle"
-                                params={{ handle: me.handle }}
-                              >
-                                <IconUser />
-                                <span>Profile</span>
-                              </Link>
-                            }
-                          />
-                        </SidebarMenuItem>
-                      )} */}
-                      {/* <SidebarMenuItem>
-                        <SidebarMenuButton
-                          size="default"
-                          tooltip="settings"
-                          render={
-                            <Link to="/settings">
-                              <IconSettings />
-                              <span>Settings</span>
-                            </Link>
-                          }
-                        />
-                      </SidebarMenuItem> */}
-                    </>
-                  )}
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      size="default"
+                      tooltip="notifications"
+                      render={
+                        <Link to="/notifications">
+                          <IconBell />
+                          <span>Notifications</span>
+                          {unread > 0 && (
+                            <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground group-data-[collapsible=icon]:hidden">
+                              {unread > 99 ? "99+" : unread}
+                            </span>
+                          )}
+                        </Link>
+                      }
+                    />
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      size="default"
+                      tooltip="messages"
+                      render={
+                        <Link to="/inbox">
+                          <IconMail />
+                          <span>Messages</span>
+                          {dmUnread > 0 && (
+                            <span className="ml-auto rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground group-data-[collapsible=icon]:hidden">
+                              {dmUnread > 99 ? "99+" : dmUnread}
+                            </span>
+                          )}
+                        </Link>
+                      }
+                    />
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      size="default"
+                      tooltip="bookmarks"
+                      render={
+                        <Link to="/bookmarks">
+                          <IconBookmark />
+                          <span>Bookmarks</span>
+                        </Link>
+                      }
+                    />
+                  </SidebarMenuItem>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      size="default"
+                      tooltip="write article"
+                      render={
+                        <Link to="/articles/new">
+                          <IconPencil />
+                          <span>Write Article</span>
+                        </Link>
+                      }
+                    />
+                  </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>
             </SidebarGroup>
           </SidebarContent>
 
           <SidebarFooter>
-            {!isPending && session && me && (
+            {me && (
               <SidebarMenu>
                 <SidebarMenuItem>
                   <UserNav user={me} />
-                </SidebarMenuItem>
-              </SidebarMenu>
-            )}
-            {!isPending && !session && (
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    size="default"
-                    tooltip="sign in"
-                    render={<Link to="/login" />}
-                  >
-                    <IconLogin />
-                    <span>Sign in</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    size="default"
-                    tooltip="sign up"
-                    render={<Link to="/signup" />}
-                  >
-                    <IconUserPlus />
-                    <span>Sign up</span>
-                  </SidebarMenuButton>
                 </SidebarMenuItem>
               </SidebarMenu>
             )}
@@ -221,7 +168,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </main>
             {/* <RightRail /> */}
           </div>
-          {session && <ComposeFab />}
+          <ComposeFab />
         </SidebarInset>
       </SidebarProvider>
     </TooltipProvider>
