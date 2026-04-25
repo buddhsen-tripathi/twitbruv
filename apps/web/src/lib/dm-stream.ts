@@ -3,7 +3,9 @@ import type { DmMessage } from "./api"
 
 export type DmEvent =
   | { type: "message"; conversationId: string; message: DmMessage }
-  | { type: "read"; conversationId: string; messageId: string }
+  | { type: "read"; conversationId: string; userId: string; messageId: string }
+  | { type: "membership"; conversationId: string }
+  | { type: "typing"; conversationId: string; userId: string }
 
 type Listener = (event: DmEvent) => void
 

@@ -23,6 +23,8 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as InboxIndexRouteImport } from './routes/inbox.index'
 import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as HandleIndexRouteImport } from './routes/$handle.index'
+import { Route as InviteTokenRouteImport } from './routes/invite.$token'
+import { Route as InboxNewRouteImport } from './routes/inbox.new'
 import { Route as InboxConversationIdRouteImport } from './routes/inbox.$conversationId'
 import { Route as HashtagTagRouteImport } from './routes/hashtag.$tag'
 import { Route as ArticlesNewRouteImport } from './routes/articles.new'
@@ -104,6 +106,16 @@ const HandleIndexRoute = HandleIndexRouteImport.update({
   path: '/',
   getParentRoute: () => HandleRoute,
 } as any)
+const InviteTokenRoute = InviteTokenRouteImport.update({
+  id: '/invite/$token',
+  path: '/invite/$token',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InboxNewRoute = InboxNewRouteImport.update({
+  id: '/new',
+  path: '/new',
+  getParentRoute: () => InboxRoute,
+} as any)
 const InboxConversationIdRoute = InboxConversationIdRouteImport.update({
   id: '/$conversationId',
   path: '/$conversationId',
@@ -174,6 +186,8 @@ export interface FileRoutesByFullPath {
   '/articles/new': typeof ArticlesNewRoute
   '/hashtag/$tag': typeof HashtagTagRoute
   '/inbox/$conversationId': typeof InboxConversationIdRoute
+  '/inbox/new': typeof InboxNewRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/$handle/': typeof HandleIndexRoute
   '/admin/': typeof AdminIndexRoute
   '/inbox/': typeof InboxIndexRoute
@@ -197,6 +211,8 @@ export interface FileRoutesByTo {
   '/articles/new': typeof ArticlesNewRoute
   '/hashtag/$tag': typeof HashtagTagRoute
   '/inbox/$conversationId': typeof InboxConversationIdRoute
+  '/inbox/new': typeof InboxNewRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/$handle': typeof HandleIndexRoute
   '/admin': typeof AdminIndexRoute
   '/inbox': typeof InboxIndexRoute
@@ -224,6 +240,8 @@ export interface FileRoutesById {
   '/articles/new': typeof ArticlesNewRoute
   '/hashtag/$tag': typeof HashtagTagRoute
   '/inbox/$conversationId': typeof InboxConversationIdRoute
+  '/inbox/new': typeof InboxNewRoute
+  '/invite/$token': typeof InviteTokenRoute
   '/$handle/': typeof HandleIndexRoute
   '/admin/': typeof AdminIndexRoute
   '/inbox/': typeof InboxIndexRoute
@@ -252,6 +270,8 @@ export interface FileRouteTypes {
     | '/articles/new'
     | '/hashtag/$tag'
     | '/inbox/$conversationId'
+    | '/inbox/new'
+    | '/invite/$token'
     | '/$handle/'
     | '/admin/'
     | '/inbox/'
@@ -275,6 +295,8 @@ export interface FileRouteTypes {
     | '/articles/new'
     | '/hashtag/$tag'
     | '/inbox/$conversationId'
+    | '/inbox/new'
+    | '/invite/$token'
     | '/$handle'
     | '/admin'
     | '/inbox'
@@ -301,6 +323,8 @@ export interface FileRouteTypes {
     | '/articles/new'
     | '/hashtag/$tag'
     | '/inbox/$conversationId'
+    | '/inbox/new'
+    | '/invite/$token'
     | '/$handle/'
     | '/admin/'
     | '/inbox/'
@@ -323,6 +347,7 @@ export interface RootRouteChildren {
   SignupRoute: typeof SignupRoute
   ArticlesNewRoute: typeof ArticlesNewRoute
   HashtagTagRoute: typeof HashtagTagRoute
+  InviteTokenRoute: typeof InviteTokenRoute
   ArticlesIdEditRoute: typeof ArticlesIdEditRoute
 }
 
@@ -425,6 +450,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/$handle/'
       preLoaderRoute: typeof HandleIndexRouteImport
       parentRoute: typeof HandleRoute
+    }
+    '/invite/$token': {
+      id: '/invite/$token'
+      path: '/invite/$token'
+      fullPath: '/invite/$token'
+      preLoaderRoute: typeof InviteTokenRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inbox/new': {
+      id: '/inbox/new'
+      path: '/new'
+      fullPath: '/inbox/new'
+      preLoaderRoute: typeof InboxNewRouteImport
+      parentRoute: typeof InboxRoute
     }
     '/inbox/$conversationId': {
       id: '/inbox/$conversationId'
@@ -534,11 +573,13 @@ const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
 
 interface InboxRouteChildren {
   InboxConversationIdRoute: typeof InboxConversationIdRoute
+  InboxNewRoute: typeof InboxNewRoute
   InboxIndexRoute: typeof InboxIndexRoute
 }
 
 const InboxRouteChildren: InboxRouteChildren = {
   InboxConversationIdRoute: InboxConversationIdRoute,
+  InboxNewRoute: InboxNewRoute,
   InboxIndexRoute: InboxIndexRoute,
 }
 
@@ -558,6 +599,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignupRoute: SignupRoute,
   ArticlesNewRoute: ArticlesNewRoute,
   HashtagTagRoute: HashtagTagRoute,
+  InviteTokenRoute: InviteTokenRoute,
   ArticlesIdEditRoute: ArticlesIdEditRoute,
 }
 export const routeTree = rootRouteImport

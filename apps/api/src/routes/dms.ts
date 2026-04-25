@@ -2,7 +2,7 @@ import { Hono } from 'hono'
 import { streamSSE } from 'hono/streaming'
 import { z } from 'zod'
 import { and, desc, eq, inArray, isNull, lt, or, sql } from '@workspace/db'
-import { schema } from '@workspace/db'
+import { schema, type Database } from '@workspace/db'
 import { assetUrl } from '@workspace/media/s3'
 import { requireAuth, type HonoEnv } from '../middleware/session.ts'
 import { notify } from '../lib/notify.ts'
@@ -24,9 +24,15 @@ const sendSchema = z
     message: 'message must include text, media, or a shared post/article',
   })
 
-const startSchema = z.object({
-  userId: z.string().uuid(),
-})
+const startSchema = z
+  .object({
+    userId: z.string().uuid().optional(),
+    userIds: z.array(z.string().uuid()).max(50).optional(),
+    title: z.string().trim().min(1).max(80).optional(),
+  })
+  .refine((b) => b.userId || (b.userIds && b.userIds.length > 0), {
+    message: 'userId or userIds required',
+  })
 
 // Confirms the caller is an active member of the conversation. Returns the row, or null.
 async function loadMembership(db: any, conversationId: string, userId: string) {
@@ -229,56 +235,372 @@ dmsRoute.get('/unread-count', async (c) => {
   return c.json({ count: row?.n ?? 0 })
 })
 
-// Find-or-create a 1:1 conversation. Idempotent so the UI can call this on every "Message" tap.
+// Start a conversation. With one peer (userId or userIds[0]) it find-or-creates the canonical
+// 1:1; with multiple peers it always creates a fresh group, with the caller as admin and an
+// optional title (otherwise UI generates one from member names).
 dmsRoute.post('/', async (c) => {
   const session = c.get('session')!
   const { db, rateLimit } = c.get('ctx')
   await rateLimit(c, 'dms.start')
   const me = session.user.id
-  const { userId: other } = startSchema.parse(await c.req.json())
-  if (other === me) return c.json({ error: 'self_conversation' }, 400)
+  const body = startSchema.parse(await c.req.json())
+  const peerIds = Array.from(
+    new Set((body.userIds ?? (body.userId ? [body.userId] : [])).filter((id) => id !== me)),
+  )
+  if (peerIds.length === 0) return c.json({ error: 'no_peers' }, 400)
 
-  // Block check: either side blocking the other prevents new conversations.
-  const [block] = await db
-    .select({ id: schema.blocks.blockerId })
+  // Block check: anyone blocking me (or me blocking anyone) breaks the create.
+  const blocks = await db
+    .select({
+      blocker: schema.blocks.blockerId,
+      blocked: schema.blocks.blockedId,
+    })
     .from(schema.blocks)
     .where(
       or(
-        and(eq(schema.blocks.blockerId, me), eq(schema.blocks.blockedId, other)),
-        and(eq(schema.blocks.blockerId, other), eq(schema.blocks.blockedId, me)),
+        and(eq(schema.blocks.blockerId, me), inArray(schema.blocks.blockedId, peerIds)),
+        and(eq(schema.blocks.blockedId, me), inArray(schema.blocks.blockerId, peerIds)),
       ),
     )
-    .limit(1)
-  if (block) return c.json({ error: 'blocked' }, 403)
+  if (blocks.length > 0) return c.json({ error: 'blocked' }, 403)
 
-  // Look for an existing 1:1 between exactly these two users where both are still members.
-  const existing = await db.execute(sql`
-    SELECT c.id
-    FROM ${schema.conversations} c
-    JOIN ${schema.conversationMembers} m1
-      ON m1.conversation_id = c.id AND m1.user_id = ${me} AND m1.left_at IS NULL
-    JOIN ${schema.conversationMembers} m2
-      ON m2.conversation_id = c.id AND m2.user_id = ${other} AND m2.left_at IS NULL
-    WHERE c.kind = 'dm'
-    LIMIT 1
-  `)
-  const existingRow = (existing as unknown as Array<{ id: string }>)[0]
-  if (existingRow) return c.json({ id: existingRow.id, created: false })
+  // 1:1: idempotent — return any existing conversation between just these two users.
+  if (peerIds.length === 1) {
+    const other = peerIds[0]!
+    const existing = await db.execute(sql`
+      SELECT c.id
+      FROM ${schema.conversations} c
+      JOIN ${schema.conversationMembers} m1
+        ON m1.conversation_id = c.id AND m1.user_id = ${me} AND m1.left_at IS NULL
+      JOIN ${schema.conversationMembers} m2
+        ON m2.conversation_id = c.id AND m2.user_id = ${other} AND m2.left_at IS NULL
+      WHERE c.kind = 'dm'
+      LIMIT 1
+    `)
+    const existingRow = (existing as unknown as Array<{ id: string }>)[0]
+    if (existingRow) return c.json({ id: existingRow.id, created: false })
+  }
+
+  const kind = peerIds.length >= 2 ? 'group' : 'dm'
 
   const id = await db.transaction(async (tx) => {
     const [created] = await tx
       .insert(schema.conversations)
-      .values({ kind: 'dm', createdById: me })
+      .values({ kind, title: body.title ?? null, createdById: me })
       .returning({ id: schema.conversations.id })
     if (!created) throw new Error('failed_to_create_conversation')
     await tx.insert(schema.conversationMembers).values([
       { conversationId: created.id, userId: me, role: 'admin' },
-      { conversationId: created.id, userId: other, role: 'member' },
+      ...peerIds.map((userId) => ({
+        conversationId: created.id,
+        userId,
+        role: 'member' as const,
+      })),
     ])
     return created.id
   })
 
   return c.json({ id, created: true })
+})
+
+// Group-only operations below. Schema enforces `kind in ('dm','group')`; we additionally guard
+// at the route layer so 1:1s can't be mutated structurally.
+
+const addMembersSchema = z.object({
+  userIds: z.array(z.string().uuid()).min(1).max(50),
+})
+
+dmsRoute.post('/:id/members', async (c) => {
+  const session = c.get('session')!
+  const { db, pubsub } = c.get('ctx')
+  const me = session.user.id
+  const conversationId = c.req.param('id')
+  const body = addMembersSchema.parse(await c.req.json())
+
+  const conv = await loadConversationForAdmin(db, conversationId, me)
+  if ('error' in conv) return c.json({ error: conv.error }, conv.status)
+
+  // Don't re-insert anyone who's already an active member; reactivate any soft-left rows.
+  const existingMembers = await db
+    .select({
+      userId: schema.conversationMembers.userId,
+      leftAt: schema.conversationMembers.leftAt,
+    })
+    .from(schema.conversationMembers)
+    .where(
+      and(
+        eq(schema.conversationMembers.conversationId, conversationId),
+        inArray(schema.conversationMembers.userId, body.userIds),
+      ),
+    )
+  const existingMap = new Map(existingMembers.map((m) => [m.userId, m]))
+  const toInsert = body.userIds.filter((id) => !existingMap.has(id))
+  const toReactivate = body.userIds.filter((id) => existingMap.get(id)?.leftAt)
+
+  await db.transaction(async (tx) => {
+    if (toInsert.length > 0) {
+      await tx.insert(schema.conversationMembers).values(
+        toInsert.map((userId) => ({
+          conversationId,
+          userId,
+          role: 'member' as const,
+        })),
+      )
+    }
+    if (toReactivate.length > 0) {
+      await tx
+        .update(schema.conversationMembers)
+        .set({ leftAt: null })
+        .where(
+          and(
+            eq(schema.conversationMembers.conversationId, conversationId),
+            inArray(schema.conversationMembers.userId, toReactivate),
+          ),
+        )
+    }
+  })
+
+  // Push a membership event so open clients refresh the header / member list.
+  await pubsub.publish(dmChannel(me), { type: 'membership', conversationId })
+  for (const userId of body.userIds) {
+    await pubsub.publish(dmChannel(userId), { type: 'membership', conversationId })
+  }
+  return c.json({ ok: true, added: toInsert.length + toReactivate.length })
+})
+
+dmsRoute.delete('/:id/members/:userId', async (c) => {
+  const session = c.get('session')!
+  const { db, pubsub } = c.get('ctx')
+  const me = session.user.id
+  const conversationId = c.req.param('id')
+  const target = c.req.param('userId')
+
+  // Members can remove themselves; only admins of a group can remove someone else.
+  if (target !== me) {
+    const conv = await loadConversationForAdmin(db, conversationId, me)
+    if ('error' in conv) return c.json({ error: conv.error }, conv.status)
+  } else {
+    const membership = await loadMembership(db, conversationId, me)
+    if (!membership) return c.json({ error: 'not_a_member' }, 403)
+  }
+
+  await db
+    .update(schema.conversationMembers)
+    .set({ leftAt: new Date() })
+    .where(
+      and(
+        eq(schema.conversationMembers.conversationId, conversationId),
+        eq(schema.conversationMembers.userId, target),
+      ),
+    )
+
+  await pubsub.publish(dmChannel(target), { type: 'membership', conversationId })
+  await pubsub.publish(dmChannel(me), { type: 'membership', conversationId })
+  return c.json({ ok: true })
+})
+
+const renameSchema = z.object({
+  title: z.string().trim().min(1).max(80).nullable(),
+})
+
+dmsRoute.patch('/:id', async (c) => {
+  const session = c.get('session')!
+  const { db, pubsub } = c.get('ctx')
+  const me = session.user.id
+  const conversationId = c.req.param('id')
+  const body = renameSchema.parse(await c.req.json())
+
+  const conv = await loadConversationForAdmin(db, conversationId, me)
+  if ('error' in conv) return c.json({ error: conv.error }, conv.status)
+
+  await db
+    .update(schema.conversations)
+    .set({ title: body.title })
+    .where(eq(schema.conversations.id, conversationId))
+
+  // Notify every active member so headers update everywhere.
+  const members = await db
+    .select({ userId: schema.conversationMembers.userId })
+    .from(schema.conversationMembers)
+    .where(
+      and(
+        eq(schema.conversationMembers.conversationId, conversationId),
+        isNull(schema.conversationMembers.leftAt),
+      ),
+    )
+  for (const m of members) {
+    await pubsub.publish(dmChannel(m.userId), { type: 'membership', conversationId })
+  }
+  return c.json({ ok: true })
+})
+
+// ---- Invitation links ----
+
+const createInviteSchema = z.object({
+  expiresInHours: z.number().int().positive().max(24 * 365).optional(),
+  maxUses: z.number().int().positive().max(1000).optional(),
+})
+
+dmsRoute.post('/:id/invites', async (c) => {
+  const session = c.get('session')!
+  const { db } = c.get('ctx')
+  const me = session.user.id
+  const conversationId = c.req.param('id')
+  const body = createInviteSchema.parse(await c.req.json().catch(() => ({})))
+
+  const conv = await loadConversationForAdmin(db, conversationId, me)
+  if ('error' in conv) return c.json({ error: conv.error }, conv.status)
+
+  // Token must be opaque and url-safe — base64url over 32 random bytes.
+  const token = b64url(crypto.getRandomValues(new Uint8Array(32)))
+  const expiresAt = body.expiresInHours
+    ? new Date(Date.now() + body.expiresInHours * 60 * 60 * 1000)
+    : null
+
+  const [invite] = await db
+    .insert(schema.conversationInvites)
+    .values({
+      conversationId,
+      token,
+      createdById: me,
+      expiresAt,
+      maxUses: body.maxUses ?? null,
+    })
+    .returning()
+  if (!invite) return c.json({ error: 'create_failed' }, 500)
+  return c.json({ invite: serializeInvite(invite) })
+})
+
+dmsRoute.get('/:id/invites', async (c) => {
+  const session = c.get('session')!
+  const { db } = c.get('ctx')
+  const me = session.user.id
+  const conversationId = c.req.param('id')
+
+  const conv = await loadConversationForAdmin(db, conversationId, me)
+  if ('error' in conv) return c.json({ error: conv.error }, conv.status)
+
+  const rows = await db
+    .select()
+    .from(schema.conversationInvites)
+    .where(eq(schema.conversationInvites.conversationId, conversationId))
+    .orderBy(desc(schema.conversationInvites.createdAt))
+  return c.json({ invites: rows.map(serializeInvite) })
+})
+
+dmsRoute.delete('/:id/invites/:inviteId', async (c) => {
+  const session = c.get('session')!
+  const { db } = c.get('ctx')
+  const me = session.user.id
+  const conversationId = c.req.param('id')
+  const inviteId = c.req.param('inviteId')
+
+  const conv = await loadConversationForAdmin(db, conversationId, me)
+  if ('error' in conv) return c.json({ error: conv.error }, conv.status)
+
+  await db
+    .update(schema.conversationInvites)
+    .set({ revokedAt: new Date() })
+    .where(
+      and(
+        eq(schema.conversationInvites.id, inviteId),
+        eq(schema.conversationInvites.conversationId, conversationId),
+      ),
+    )
+  return c.json({ ok: true })
+})
+
+// Helper: format an invite row for the client. Returns the join URL absolute against the API
+// host; the web app can swap host for its own domain when rendering.
+function serializeInvite(row: typeof schema.conversationInvites.$inferSelect) {
+  return {
+    id: row.id,
+    token: row.token,
+    expiresAt: row.expiresAt?.toISOString() ?? null,
+    maxUses: row.maxUses,
+    usedCount: row.usedCount,
+    revokedAt: row.revokedAt?.toISOString() ?? null,
+    createdAt: row.createdAt.toISOString(),
+  }
+}
+
+function b64url(bytes: Uint8Array): string {
+  let bin = ''
+  for (const b of bytes) bin += String.fromCharCode(b)
+  return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+}
+
+// Helper: load a group conversation that the caller can administer. 1:1s reject — there's no
+// admin concept for two-person chats. Returns either { conv, kind } or an { error, status } shape.
+async function loadConversationForAdmin(
+  db: Database,
+  conversationId: string,
+  userId: string,
+): Promise<
+  | { conv: typeof schema.conversations.$inferSelect; kind: 'group' }
+  | { error: string; status: 403 | 404 }
+> {
+  const [conv] = await db
+    .select()
+    .from(schema.conversations)
+    .where(eq(schema.conversations.id, conversationId))
+    .limit(1)
+  if (!conv) return { error: 'not_found', status: 404 }
+  if (conv.kind !== 'group') return { error: 'not_a_group', status: 403 }
+  const membership = await loadMembership(db, conversationId, userId)
+  if (!membership || membership.role !== 'admin') {
+    return { error: 'not_admin', status: 403 }
+  }
+  return { conv, kind: 'group' }
+}
+
+// Conversation metadata: kind, title, all currently-active members. Used by the thread UI to
+// render the header and the settings drawer.
+dmsRoute.get('/:id', async (c) => {
+  const session = c.get('session')!
+  const { db, mediaEnv } = c.get('ctx')
+  const me = session.user.id
+  const conversationId = c.req.param('id')
+
+  const membership = await loadMembership(db, conversationId, me)
+  if (!membership) return c.json({ error: 'not_a_member' }, 403)
+
+  const [conv] = await db
+    .select()
+    .from(schema.conversations)
+    .where(eq(schema.conversations.id, conversationId))
+    .limit(1)
+  if (!conv) return c.json({ error: 'not_found' }, 404)
+
+  const memberRows = await db
+    .select({ user: schema.users, member: schema.conversationMembers })
+    .from(schema.conversationMembers)
+    .innerJoin(schema.users, eq(schema.users.id, schema.conversationMembers.userId))
+    .where(
+      and(
+        eq(schema.conversationMembers.conversationId, conversationId),
+        isNull(schema.conversationMembers.leftAt),
+      ),
+    )
+
+  return c.json({
+    conversation: {
+      id: conv.id,
+      kind: conv.kind,
+      title: conv.title,
+      createdAt: conv.createdAt.toISOString(),
+      myRole: membership.role,
+      members: memberRows.map((r) => ({
+        id: r.user.id,
+        handle: r.user.handle,
+        displayName: r.user.displayName,
+        avatarUrl: assetUrl(mediaEnv, r.user.avatarUrl),
+        isVerified: r.user.isVerified,
+        role: r.member.role,
+        lastReadMessageId: r.member.lastReadMessageId,
+      })),
+    },
+  })
 })
 
 // Paginated message history for a conversation. Returned newest-first; clients reverse for display.
@@ -463,6 +785,40 @@ dmsRoute.post('/:id/messages', async (c) => {
   return c.json({ message: payload })
 })
 
+// Fire-and-forget typing ping. Frontend debounces at ~one per 3s; we publish to every other
+// active member's channel and that's it — no DB write, ephemeral.
+dmsRoute.post('/:id/typing', async (c) => {
+  const session = c.get('session')!
+  const { db, pubsub, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'dms.typing')
+  const me = session.user.id
+  const conversationId = c.req.param('id')
+
+  const membership = await loadMembership(db, conversationId, me)
+  if (!membership) return c.json({ error: 'not_a_member' }, 403)
+
+  const others = await db
+    .select({ userId: schema.conversationMembers.userId })
+    .from(schema.conversationMembers)
+    .where(
+      and(
+        eq(schema.conversationMembers.conversationId, conversationId),
+        isNull(schema.conversationMembers.leftAt),
+        sql`${schema.conversationMembers.userId} <> ${me}`,
+      ),
+    )
+  await Promise.all(
+    others.map((o) =>
+      pubsub.publish(dmChannel(o.userId), {
+        type: 'typing',
+        conversationId,
+        userId: me,
+      }),
+    ),
+  )
+  return c.json({ ok: true })
+})
+
 // Mark all messages up to and including a given message as read for the current user.
 // If no messageId is given, advance to the latest message in the conversation.
 dmsRoute.post('/:id/read', async (c) => {
@@ -503,12 +859,19 @@ dmsRoute.post('/:id/read', async (c) => {
       ),
     )
 
-  // Publish to my own channel so other tabs (and the sidebar unread badge) refresh.
-  await pubsub.publish(dmChannel(me), {
-    type: 'read',
-    conversationId,
-    messageId: targetId,
-  })
+  // Publish read receipt to every active member: my own channel for sidebar/tab sync, and
+  // every other member so their thread can render "seen" indicators in real time.
+  const memberRows = await db
+    .select({ userId: schema.conversationMembers.userId })
+    .from(schema.conversationMembers)
+    .where(
+      and(
+        eq(schema.conversationMembers.conversationId, conversationId),
+        isNull(schema.conversationMembers.leftAt),
+      ),
+    )
+  const payload = { type: 'read' as const, conversationId, userId: me, messageId: targetId }
+  await Promise.all(memberRows.map((r) => pubsub.publish(dmChannel(r.userId), payload)))
 
   return c.json({ ok: true })
 })

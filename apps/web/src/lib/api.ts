@@ -86,11 +86,58 @@ export const api = {
 
   dmConversations: () =>
     request<{ conversations: Array<DmConversation> }>("/api/dms"),
+  dmConversation: (conversationId: string) =>
+    request<{ conversation: DmConversationDetail }>(`/api/dms/${conversationId}`),
   dmUnreadCount: () => request<{ count: number }>("/api/dms/unread-count"),
   dmStart: (userId: string) =>
     request<{ id: string; created: boolean }>("/api/dms", {
       method: "POST",
       body: JSON.stringify({ userId }),
+    }),
+  dmCreateGroup: (userIds: Array<string>, title?: string) =>
+    request<{ id: string; created: boolean }>("/api/dms", {
+      method: "POST",
+      body: JSON.stringify({ userIds, title }),
+    }),
+  dmRename: (conversationId: string, title: string | null) =>
+    request<{ ok: true }>(`/api/dms/${conversationId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ title }),
+    }),
+  dmAddMembers: (conversationId: string, userIds: Array<string>) =>
+    request<{ ok: true; added: number }>(`/api/dms/${conversationId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userIds }),
+    }),
+  dmRemoveMember: (conversationId: string, userId: string) =>
+    request<{ ok: true }>(`/api/dms/${conversationId}/members/${userId}`, {
+      method: "DELETE",
+    }),
+  dmLeave: (conversationId: string, myUserId: string) =>
+    request<{ ok: true }>(`/api/dms/${conversationId}/members/${myUserId}`, {
+      method: "DELETE",
+    }),
+  dmTyping: (conversationId: string) =>
+    request<{ ok: true }>(`/api/dms/${conversationId}/typing`, { method: "POST" }),
+  dmCreateInvite: (
+    conversationId: string,
+    body: { expiresInHours?: number; maxUses?: number } = {},
+  ) =>
+    request<{ invite: DmInvite }>(`/api/dms/${conversationId}/invites`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  dmInvites: (conversationId: string) =>
+    request<{ invites: Array<DmInvite> }>(`/api/dms/${conversationId}/invites`),
+  dmRevokeInvite: (conversationId: string, inviteId: string) =>
+    request<{ ok: true }>(`/api/dms/${conversationId}/invites/${inviteId}`, {
+      method: "DELETE",
+    }),
+  invitePreview: (token: string) =>
+    request<{ invite: InvitePreview }>(`/api/invites/${encodeURIComponent(token)}`),
+  inviteAccept: (token: string) =>
+    request<{ id: string }>(`/api/invites/${encodeURIComponent(token)}/accept`, {
+      method: "POST",
     }),
   dmMessages: (conversationId: string, cursor?: string) =>
     request<{ messages: Array<DmMessage>; nextCursor: string | null }>(
@@ -446,6 +493,45 @@ export interface DmConversation {
     text: string | null
     createdAt: string
   } | null
+}
+
+export interface DmConversationDetail {
+  id: string
+  kind: "dm" | "group"
+  title: string | null
+  createdAt: string
+  myRole: "member" | "admin"
+  members: Array<
+    DmMember & { role: "member" | "admin"; lastReadMessageId: string | null }
+  >
+}
+
+export interface DmInvite {
+  id: string
+  token: string
+  expiresAt: string | null
+  maxUses: number | null
+  usedCount: number
+  revokedAt: string | null
+  createdAt: string
+}
+
+export interface InvitePreview {
+  conversation: {
+    id: string
+    kind: "dm" | "group"
+    title: string | null
+    memberCount: number
+    previewMembers: Array<{
+      id: string
+      handle: string | null
+      displayName: string | null
+      avatarUrl: string | null
+    }>
+  }
+  expiresAt: string | null
+  maxUses: number | null
+  usedCount: number
 }
 
 export interface DmMessage {

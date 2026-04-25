@@ -1,7 +1,13 @@
-import { Link, createFileRoute } from "@tanstack/react-router"
+import { Link, createFileRoute, useRouter } from "@tanstack/react-router"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { IconPaperclip, IconX } from "@tabler/icons-react"
+import { IconPaperclip, IconSettings, IconX } from "@tabler/icons-react"
 import { Button } from "@workspace/ui/components/button"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@workspace/ui/components/dialog"
 import { api } from "../lib/api"
 import { authClient } from "../lib/auth"
 import { Avatar } from "../components/avatar"
@@ -13,14 +19,23 @@ import {
   pickVariantUrl,
   uploadImage,
 } from "../lib/media"
+import { WEB_URL } from "../lib/env"
 import type { ChangeEvent, FormEvent, KeyboardEvent } from "react"
-import type { DmMessage, PostMedia } from "../lib/api"
+import type {
+  DmConversationDetail,
+  DmInvite,
+  DmMessage,
+  PostMedia,
+  PublicUser,
+} from "../lib/api"
 
 export const Route = createFileRoute("/inbox/$conversationId")({
   component: Thread,
 })
 
 const MAX_INPUT_BYTES = 15 * 1024 * 1024 // mirrors API/api/media intent ceiling pre-compress
+const TYPING_TTL = 4000 // how long a typing indicator stays on screen after the last ping
+const TYPING_DEBOUNCE = 3000 // don't ping the API more than once per N ms while typing
 
 interface Pending {
   id: string
@@ -30,13 +45,20 @@ interface Pending {
 
 function Thread() {
   const { conversationId } = Route.useParams()
+  const router = useRouter()
   const { data: session } = authClient.useSession()
   const me = session?.user.id ?? null
+  const [conversation, setConversation] = useState<DmConversationDetail | null>(null)
+  const [settingsOpen, setSettingsOpen] = useState(false)
   const [messages, setMessages] = useState<Array<DmMessage>>([])
   const [draft, setDraft] = useState("")
   const [pending, setPending] = useState<Pending | null>(null)
   const [sending, setSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // Map of userId -> timestamp(ms) when their typing event last arrived; we render anyone with
+  // an entry within the last TYPING_TTL ms.
+  const [typingAt, setTypingAt] = useState<Record<string, number>>({})
+  const lastTypingSentRef = useRef(0)
   const scrollerRef = useRef<HTMLDivElement>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -76,13 +98,75 @@ function Thread() {
 
   useEffect(() => {
     return subscribeToDmStream((event) => {
-      if (event.type !== "message") return
       if (event.conversationId !== conversationId) return
-      setMessages((prev) => {
-        if (prev.some((m) => m.id === event.message.id)) return prev
-        return [...prev, event.message]
-      })
+      switch (event.type) {
+        case "message":
+          setMessages((prev) =>
+            prev.some((m) => m.id === event.message.id) ? prev : [...prev, event.message],
+          )
+          // Whoever just sent a message obviously isn't typing anymore.
+          setTypingAt((prev) => {
+            if (!prev[event.message.senderId]) return prev
+            const next = { ...prev }
+            delete next[event.message.senderId]
+            return next
+          })
+          break
+        case "membership":
+          // Member added/removed/renamed — refresh metadata so the header is current.
+          api
+            .dmConversation(conversationId)
+            .then((r) => setConversation(r.conversation))
+            .catch(() => {})
+          break
+        case "read":
+          setConversation((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  members: prev.members.map((m) =>
+                    m.id === event.userId
+                      ? { ...m, lastReadMessageId: event.messageId }
+                      : m,
+                  ),
+                }
+              : prev,
+          )
+          break
+        case "typing":
+          if (event.userId === me) break
+          setTypingAt((prev) => ({ ...prev, [event.userId]: Date.now() }))
+          break
+      }
     })
+  }, [conversationId, me])
+
+  // Sweep stale typing indicators every second so they fade ~4s after the last ping.
+  useEffect(() => {
+    const iv = setInterval(() => {
+      setTypingAt((prev) => {
+        const cutoff = Date.now() - TYPING_TTL
+        let changed = false
+        const next: Record<string, number> = {}
+        for (const [userId, ts] of Object.entries(prev)) {
+          if (ts >= cutoff) next[userId] = ts
+          else changed = true
+        }
+        return changed ? next : prev
+      })
+    }, 1000)
+    return () => clearInterval(iv)
+  }, [])
+
+  // Fetch conversation metadata (kind, title, members, my role).
+  useEffect(() => {
+    setConversation(null)
+    api
+      .dmConversation(conversationId)
+      .then((r) => setConversation(r.conversation))
+      .catch(() => {
+        /* metadata is best-effort; thread can still render without it */
+      })
   }, [conversationId])
 
   // First load (or conversation switch): force-scroll to bottom and re-scroll after a beat so
@@ -220,6 +304,20 @@ function Thread() {
     }
   }
 
+  function pingTyping() {
+    const now = Date.now()
+    if (now - lastTypingSentRef.current < TYPING_DEBOUNCE) return
+    lastTypingSentRef.current = now
+    api.dmTyping(conversationId).catch(() => {})
+  }
+
+  // Quickly resolve who the typing indicators belong to (sender details for avatar+name).
+  const typingMembers = useMemo(() => {
+    if (!conversation) return []
+    const ids = new Set(Object.keys(typingAt))
+    return conversation.members.filter((m) => ids.has(m.id) && m.id !== me)
+  }, [typingAt, conversation, me])
+
   return (
     <main className="flex h-[calc(100vh-3.5rem)] flex-col">
       <header className="flex items-center gap-3 border-b border-border bg-background/80 px-4 py-3 backdrop-blur-sm">
@@ -229,31 +327,29 @@ function Thread() {
         >
           ← Inbox
         </Link>
-        <div className="ml-2 flex min-w-0 items-center gap-2">
-          {peer && (
-            <Avatar
-              initial={(peer.displayName || peer.handle || "?")
-                .slice(0, 1)
-                .toUpperCase()}
-              src={peer.avatarUrl}
-            />
-          )}
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold">
-              {peer?.displayName || `@${peer?.handle}`}
-            </div>
-            {peer?.handle && (
-              <Link
-                to="/$handle"
-                params={{ handle: peer.handle }}
-                className="truncate text-xs text-muted-foreground hover:underline"
-              >
-                @{peer.handle}
-              </Link>
-            )}
-          </div>
-        </div>
+        <ThreadHeader conversation={conversation} peer={peer} me={me} />
+        {conversation?.kind === "group" && (
+          <Button
+            size="sm"
+            variant="ghost"
+            aria-label="conversation settings"
+            onClick={() => setSettingsOpen(true)}
+          >
+            <IconSettings size={16} stroke={1.75} />
+          </Button>
+        )}
       </header>
+
+      {conversation && conversation.kind === "group" && (
+        <GroupSettingsDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          conversation={conversation}
+          me={me}
+          onChanged={(updated) => setConversation(updated)}
+          onLeft={() => router.navigate({ to: "/inbox" })}
+        />
+      )}
 
       <div ref={scrollerRef} className="flex-1 overflow-y-auto px-4 py-4">
         {error && (
@@ -269,9 +365,35 @@ function Thread() {
 
         <ul className="flex flex-col gap-1">
           {groups.map((group) => (
-            <GroupBlock key={group.key} group={group} me={me} />
+            <GroupBlock
+              key={group.key}
+              group={group}
+              me={me}
+              members={conversation?.members}
+            />
           ))}
         </ul>
+
+        {typingMembers.length > 0 && (
+          <div className="mt-2 flex items-center gap-2 px-2 text-xs text-muted-foreground">
+            <span className="flex -space-x-1">
+              {typingMembers.slice(0, 3).map((m) => (
+                <Avatar
+                  key={m.id}
+                  initial={(m.displayName || m.handle || "?").slice(0, 1).toUpperCase()}
+                  src={m.avatarUrl}
+                  className="size-5 ring-2 ring-background"
+                />
+              ))}
+            </span>
+            <TypingDots />
+            <span>
+              {typingMembers.length === 1
+                ? `${typingMembers[0]?.displayName || typingMembers[0]?.handle || "Someone"} is typing…`
+                : `${typingMembers.length} people are typing…`}
+            </span>
+          </div>
+        )}
       </div>
 
       {pending && (
@@ -317,7 +439,10 @@ function Thread() {
         <textarea
           ref={textareaRef}
           value={draft}
-          onChange={(e) => setDraft(e.target.value)}
+          onChange={(e) => {
+            setDraft(e.target.value)
+            if (e.target.value.length > 0) pingTyping()
+          }}
           placeholder={pending ? "Add a caption…" : "Message"}
           rows={1}
           disabled={sending}
@@ -365,8 +490,22 @@ function buildGroups(messages: Array<DmMessage>): Array<MessageGroup> {
   return out
 }
 
-function GroupBlock({ group, me }: { group: MessageGroup; me: string | null }) {
+function GroupBlock({
+  group,
+  me,
+  members,
+}: {
+  group: MessageGroup
+  me: string | null
+  members: DmConversationDetail["members"] | undefined
+}) {
   const isMine = group.messages[0].senderId === me
+  const lastMessage = group.messages[group.messages.length - 1]
+  // Read receipts only matter on my own bubbles, on the last message of the chain.
+  const seenBy =
+    isMine && members
+      ? members.filter((m) => m.id !== me && m.lastReadMessageId === lastMessage.id)
+      : []
   return (
     <>
       {group.daySeparator && (
@@ -409,9 +548,38 @@ function GroupBlock({ group, me }: { group: MessageGroup; me: string | null }) {
               />
             )
           })}
+          {seenBy.length > 0 && (
+            <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+              <span>Seen</span>
+              {seenBy.length > 1 && (
+                <span className="flex -space-x-1">
+                  {seenBy.slice(0, 4).map((m) => (
+                    <Avatar
+                      key={m.id}
+                      initial={(m.displayName || m.handle || "?")
+                        .slice(0, 1)
+                        .toUpperCase()}
+                      src={m.avatarUrl}
+                      className="size-3.5 ring-1 ring-background"
+                    />
+                  ))}
+                </span>
+              )}
+            </div>
+          )}
         </div>
       </li>
     </>
+  )
+}
+
+function TypingDots() {
+  return (
+    <span className="inline-flex items-center gap-0.5">
+      <span className="size-1 animate-bounce rounded-full bg-current [animation-delay:-200ms]" />
+      <span className="size-1 animate-bounce rounded-full bg-current [animation-delay:-100ms]" />
+      <span className="size-1 animate-bounce rounded-full bg-current" />
+    </span>
   )
 }
 
@@ -491,6 +659,405 @@ function MessageImage({ media }: { media: PostMedia }) {
       />
     </ImageLightbox>
   )
+}
+
+function ThreadHeader({
+  conversation,
+  peer,
+  me,
+}: {
+  conversation: DmConversationDetail | null
+  peer: DmMessage["sender"] | null
+  me: string | null
+}) {
+  if (conversation?.kind === "group") {
+    const others = conversation.members.filter((m) => m.id !== me)
+    const title =
+      conversation.title ??
+      others
+        .slice(0, 3)
+        .map((m) => m.displayName ?? (m.handle ? `@${m.handle}` : "user"))
+        .join(", ")
+    return (
+      <div className="ml-2 flex min-w-0 flex-1 items-center gap-2">
+        <div className="relative size-8 shrink-0">
+          {others.slice(0, 2).map((m, i) => (
+            <Avatar
+              key={m.id}
+              initial={(m.displayName || m.handle || "?").slice(0, 1).toUpperCase()}
+              src={m.avatarUrl}
+              className={`absolute size-6 ring-2 ring-background ${
+                i === 0 ? "left-0 top-0" : "bottom-0 right-0"
+              }`}
+            />
+          ))}
+        </div>
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold">{title}</div>
+          <div className="text-xs text-muted-foreground">
+            {conversation.members.length} member{conversation.members.length === 1 ? "" : "s"}
+          </div>
+        </div>
+      </div>
+    )
+  }
+  // 1:1 — show the peer.
+  return (
+    <div className="ml-2 flex min-w-0 flex-1 items-center gap-2">
+      {peer && (
+        <Avatar
+          initial={(peer.displayName || peer.handle || "?").slice(0, 1).toUpperCase()}
+          src={peer.avatarUrl}
+        />
+      )}
+      <div className="min-w-0">
+        <div className="truncate text-sm font-semibold">
+          {peer?.displayName || (peer?.handle ? `@${peer.handle}` : "Conversation")}
+        </div>
+        {peer?.handle && (
+          <Link
+            to="/$handle"
+            params={{ handle: peer.handle }}
+            className="truncate text-xs text-muted-foreground hover:underline"
+          >
+            @{peer.handle}
+          </Link>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function GroupSettingsDialog({
+  open,
+  onOpenChange,
+  conversation,
+  me,
+  onChanged,
+  onLeft,
+}: {
+  open: boolean
+  onOpenChange: (next: boolean) => void
+  conversation: DmConversationDetail
+  me: string | null
+  onChanged: (next: DmConversationDetail) => void
+  onLeft: () => void
+}) {
+  const isAdmin = conversation.myRole === "admin"
+  const [title, setTitle] = useState(conversation.title ?? "")
+  const [search, setSearch] = useState("")
+  const [results, setResults] = useState<Array<PublicUser>>([])
+  const [busy, setBusy] = useState(false)
+
+  // Re-sync local title state if the dialog reopens against a freshly-renamed conversation.
+  useEffect(() => {
+    setTitle(conversation.title ?? "")
+  }, [conversation.title, open])
+
+  useEffect(() => {
+    if (search.trim().length < 2) {
+      setResults([])
+      return
+    }
+    const t = setTimeout(async () => {
+      try {
+        const { users } = await api.search(search.trim())
+        setResults(
+          users.filter((u) => !conversation.members.some((m) => m.id === u.id)),
+        )
+      } catch {
+        setResults([])
+      }
+    }, 200)
+    return () => clearTimeout(t)
+  }, [search, conversation.members])
+
+  async function refresh() {
+    const { conversation: updated } = await api.dmConversation(conversation.id)
+    onChanged(updated)
+  }
+
+  async function rename() {
+    if (busy) return
+    const next = title.trim() || null
+    if (next === conversation.title) return
+    setBusy(true)
+    try {
+      await api.dmRename(conversation.id, next)
+      await refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function add(u: PublicUser) {
+    if (busy) return
+    setBusy(true)
+    try {
+      await api.dmAddMembers(conversation.id, [u.id])
+      setSearch("")
+      setResults([])
+      await refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function remove(userId: string) {
+    if (busy) return
+    setBusy(true)
+    try {
+      await api.dmRemoveMember(conversation.id, userId)
+      await refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function leave() {
+    if (busy || !me) return
+    if (!window.confirm("Leave this conversation?")) return
+    setBusy(true)
+    try {
+      await api.dmLeave(conversation.id, me)
+      onOpenChange(false)
+      onLeft()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Group settings</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          {isAdmin ? (
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Name</label>
+              <div className="flex gap-2">
+                <input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  maxLength={80}
+                  placeholder="(no name)"
+                  className="flex-1 rounded-md border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+                <Button size="sm" disabled={busy} onClick={rename}>
+                  Save
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="text-sm">
+              <span className="text-muted-foreground">Name: </span>
+              <span className="font-medium">{conversation.title || "(no name)"}</span>
+            </div>
+          )}
+
+          <div className="space-y-2">
+            <label className="text-xs font-medium text-muted-foreground">
+              Members ({conversation.members.length})
+            </label>
+            <ul className="divide-y divide-border rounded-md border border-border">
+              {conversation.members.map((m) => (
+                <li key={m.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                  <Avatar
+                    initial={(m.displayName || m.handle || "?").slice(0, 1).toUpperCase()}
+                    src={m.avatarUrl}
+                    className="size-7"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">
+                      {m.displayName || (m.handle ? `@${m.handle}` : m.id.slice(0, 8))}
+                      {m.role === "admin" && (
+                        <span className="ml-1 text-xs text-muted-foreground">(admin)</span>
+                      )}
+                      {m.id === me && (
+                        <span className="ml-1 text-xs text-muted-foreground">(you)</span>
+                      )}
+                    </div>
+                  </div>
+                  {isAdmin && m.id !== me && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      disabled={busy}
+                      onClick={() => remove(m.id)}
+                    >
+                      Remove
+                    </Button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+
+          {isAdmin && (
+            <div className="space-y-2">
+              <label className="text-xs font-medium text-muted-foreground">Add member</label>
+              <input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="search by handle or name"
+                className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              {results.length > 0 && (
+                <ul className="divide-y divide-border rounded-md border border-border">
+                  {results.slice(0, 6).map((u) => (
+                    <li key={u.id}>
+                      <button
+                        type="button"
+                        onClick={() => add(u)}
+                        className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm transition hover:bg-muted/30"
+                      >
+                        <Avatar
+                          initial={(u.displayName || u.handle || "?").slice(0, 1).toUpperCase()}
+                          src={u.avatarUrl}
+                          className="size-7"
+                        />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate font-medium">
+                            {u.displayName || (u.handle ? `@${u.handle}` : u.id.slice(0, 8))}
+                          </div>
+                          {u.handle && (
+                            <div className="truncate text-xs text-muted-foreground">
+                              @{u.handle}
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+
+          {isAdmin && <InviteSection conversationId={conversation.id} />}
+
+          <Button
+            variant="destructive"
+            size="sm"
+            disabled={busy}
+            onClick={leave}
+            className="w-full"
+          >
+            Leave conversation
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function InviteSection({ conversationId }: { conversationId: string }) {
+  const [invites, setInvites] = useState<Array<DmInvite> | null>(null)
+  const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState<string | null>(null)
+
+  const refresh = useCallback(async () => {
+    const { invites } = await api.dmInvites(conversationId)
+    setInvites(invites)
+  }, [conversationId])
+
+  useEffect(() => {
+    refresh().catch(() => setInvites([]))
+  }, [refresh])
+
+  async function create() {
+    if (busy) return
+    setBusy(true)
+    try {
+      await api.dmCreateInvite(conversationId)
+      await refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function revoke(id: string) {
+    if (busy) return
+    setBusy(true)
+    try {
+      await api.dmRevokeInvite(conversationId, id)
+      await refresh()
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function copy(token: string) {
+    const url = `${WEB_URL}/invite/${token}`
+    try {
+      await navigator.clipboard.writeText(url)
+      setCopied(token)
+      setTimeout(() => setCopied((prev) => (prev === token ? null : prev)), 1500)
+    } catch {
+      /* clipboard blocked — user can long-press the link */
+    }
+  }
+
+  const live = invites?.filter((i) => isLive(i)) ?? []
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center justify-between">
+        <label className="text-xs font-medium text-muted-foreground">
+          Invite links ({live.length})
+        </label>
+        <Button size="sm" variant="outline" disabled={busy} onClick={create}>
+          New link
+        </Button>
+      </div>
+      {invites && invites.length === 0 && (
+        <p className="text-xs text-muted-foreground">No invite links yet.</p>
+      )}
+      {live.length > 0 && (
+        <ul className="divide-y divide-border rounded-md border border-border">
+          {live.map((invite) => {
+            const url = `${WEB_URL}/invite/${invite.token}`
+            return (
+              <li key={invite.id} className="space-y-1 px-3 py-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 truncate rounded bg-muted px-2 py-1 text-[11px]">
+                    {url}
+                  </code>
+                  <Button size="sm" variant="ghost" onClick={() => copy(invite.token)}>
+                    {copied === invite.token ? "Copied" : "Copy"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => revoke(invite.id)}
+                  >
+                    Revoke
+                  </Button>
+                </div>
+                <p className="text-muted-foreground">
+                  {invite.maxUses
+                    ? `${invite.usedCount}/${invite.maxUses} uses · `
+                    : `${invite.usedCount} uses · `}
+                  {invite.expiresAt
+                    ? `expires ${new Date(invite.expiresAt).toLocaleDateString()}`
+                    : "no expiry"}
+                </p>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
+}
+
+function isLive(invite: DmInvite): boolean {
+  if (invite.revokedAt) return false
+  if (invite.expiresAt && new Date(invite.expiresAt).getTime() < Date.now()) return false
+  if (invite.maxUses !== null && invite.usedCount >= invite.maxUses) return false
+  return true
 }
 
 function formatDay(d: Date): string {

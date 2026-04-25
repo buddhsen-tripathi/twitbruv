@@ -49,6 +49,8 @@ export const BUCKETS = {
     { windowMs: DAY, max: intEnv('RATE_LIMIT_DMS_PER_DAY', 1000) },
   ],
   'dms.start': [{ windowMs: HOUR, max: intEnv('RATE_LIMIT_DM_STARTS_PER_HOUR', 30) }],
+  // Typing pings are debounced client-side to ~one per 3s; this cap is generous.
+  'dms.typing': [{ windowMs: MIN, max: intEnv('RATE_LIMIT_TYPING_PER_MINUTE', 60) }],
   // Account creation. Tight per-IP cap to make spam signups expensive without breaking
   // legitimate household/coworker shared-IP signups.
   'auth.signup': [

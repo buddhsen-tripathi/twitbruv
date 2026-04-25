@@ -1,4 +1,4 @@
-import { index, pgTable, primaryKey, text, timestamp, uuid } from 'drizzle-orm/pg-core'
+import { index, integer, pgTable, primaryKey, text, timestamp, uniqueIndex, uuid } from 'drizzle-orm/pg-core'
 import { users } from './auth.ts'
 import { media } from './media.ts'
 import { posts } from './posts.ts'
@@ -82,4 +82,29 @@ export const messageReactions = pgTable(
     emoji: text('emoji').notNull(),
   },
   (t) => [primaryKey({ columns: [t.messageId, t.userId, t.emoji] })],
+)
+
+// Shareable invite links for group conversations. The token is opaque; expiresAt and maxUses
+// are both nullable so an invite can be perpetual / unlimited if the admin chooses.
+export const conversationInvites = pgTable(
+  'conversation_invites',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    conversationId: uuid('conversation_id')
+      .notNull()
+      .references(() => conversations.id, { onDelete: 'cascade' }),
+    token: text('token').notNull(),
+    createdById: uuid('created_by_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    maxUses: integer('max_uses'),
+    usedCount: integer('used_count').notNull().default(0),
+    revokedAt: timestamp('revoked_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('conversation_invites_token_uq').on(t.token),
+    index('conversation_invites_conversation_idx').on(t.conversationId),
+  ],
 )
