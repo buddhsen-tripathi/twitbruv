@@ -41,6 +41,7 @@ function Thread() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const lastSeenIdRef = useRef<string | null>(null)
+  const initialScrolledRef = useRef(false)
 
   // Initial hydrate from REST; subsequent updates come through the SSE stream. We still keep a
   // slow 30s poll as a belt-and-suspenders guard if the socket silently stalls.
@@ -67,6 +68,7 @@ function Thread() {
   useEffect(() => {
     setMessages([])
     setError(null)
+    initialScrolledRef.current = false
     load()
     const iv = setInterval(() => load({ silent: true }), 30_000)
     return () => clearInterval(iv)
@@ -83,12 +85,29 @@ function Thread() {
     })
   }, [conversationId])
 
-  // Auto-scroll to the latest message whenever one arrives.
+  // First load (or conversation switch): force-scroll to bottom and re-scroll after a beat so
+  // async image layout doesn't leave us stranded above the latest message. After that, only
+  // auto-scroll on new arrivals if the user is already near the bottom.
   useEffect(() => {
     const el = scrollerRef.current
-    if (!el) return
-    el.scrollTop = el.scrollHeight
-  }, [messages.length])
+    if (!el || messages.length === 0) return
+    const stickToBottom = () => {
+      el.scrollTop = el.scrollHeight
+    }
+    if (!initialScrolledRef.current) {
+      initialScrolledRef.current = true
+      stickToBottom()
+      // Catch image / font layout shifts that happen after the initial paint.
+      const t1 = setTimeout(stickToBottom, 50)
+      const t2 = setTimeout(stickToBottom, 250)
+      return () => {
+        clearTimeout(t1)
+        clearTimeout(t2)
+      }
+    }
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120
+    if (nearBottom) stickToBottom()
+  }, [messages])
 
   // Mark-read: bump the high-water-mark whenever the latest visible message changes.
   useEffect(() => {
@@ -221,8 +240,7 @@ function Thread() {
           )}
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold">
-              {peer?.displayName ||
-                (peer?.handle ? `@${peer.handle}` : "Conversation")}
+              {peer?.displayName || `@${peer?.handle}`}
             </div>
             {peer?.handle && (
               <Link
