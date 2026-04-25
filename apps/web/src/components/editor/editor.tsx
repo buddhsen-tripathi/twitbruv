@@ -42,7 +42,7 @@ export function Editor({
   return (
     <LexicalComposer
       initialConfig={{
-        namespace: "twotter-article",
+        namespace: "article-editor",
         theme: editorTheme,
         onError(err) {
           console.error("[lexical]", err)

@@ -49,6 +49,27 @@ export const BUCKETS = {
     { windowMs: DAY, max: intEnv('RATE_LIMIT_DMS_PER_DAY', 1000) },
   ],
   'dms.start': [{ windowMs: HOUR, max: intEnv('RATE_LIMIT_DM_STARTS_PER_HOUR', 30) }],
+  // Account creation. Tight per-IP cap to make spam signups expensive without breaking
+  // legitimate household/coworker shared-IP signups.
+  'auth.signup': [
+    { windowMs: HOUR, max: intEnv('RATE_LIMIT_SIGNUPS_PER_HOUR', 5) },
+    { windowMs: DAY, max: intEnv('RATE_LIMIT_SIGNUPS_PER_DAY', 20) },
+  ],
+  // Login attempts — guard against credential stuffing / brute force.
+  'auth.signin': [
+    { windowMs: MIN, max: intEnv('RATE_LIMIT_SIGNINS_PER_MINUTE', 10) },
+    { windowMs: HOUR, max: intEnv('RATE_LIMIT_SIGNINS_PER_HOUR', 60) },
+  ],
+  'users.block': [{ windowMs: DAY, max: intEnv('RATE_LIMIT_BLOCKS_PER_DAY', 100) }],
+  'users.mute': [{ windowMs: DAY, max: intEnv('RATE_LIMIT_MUTES_PER_DAY', 100) }],
+  'posts.edit': [
+    { windowMs: MIN, max: intEnv('RATE_LIMIT_POST_EDITS_PER_MINUTE', 10) },
+    { windowMs: DAY, max: intEnv('RATE_LIMIT_POST_EDITS_PER_DAY', 200) },
+  ],
+  'articles.write': [
+    { windowMs: HOUR, max: intEnv('RATE_LIMIT_ARTICLES_PER_HOUR', 20) },
+    { windowMs: DAY, max: intEnv('RATE_LIMIT_ARTICLES_PER_DAY', 100) },
+  ],
 } satisfies Record<string, Array<FixedWindowLimit>>
 
 export type BucketName = keyof typeof BUCKETS

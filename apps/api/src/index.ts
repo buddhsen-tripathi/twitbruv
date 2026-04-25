@@ -4,7 +4,7 @@ import { logger } from 'hono/logger'
 import { secureHeaders } from 'hono/secure-headers'
 import { buildContext } from './lib/context.ts'
 import { handleRateLimitError } from './lib/rate-limit.ts'
-import { sessionMiddleware, type HonoEnv } from './middleware/session.ts'
+import { requireSameOrigin, sessionMiddleware, type HonoEnv } from './middleware/session.ts'
 import { meRoute } from './routes/me.ts'
 import { usersRoute } from './routes/users.ts'
 import { postsRoute } from './routes/posts.ts'
@@ -45,12 +45,20 @@ app.use(
   }),
 )
 app.use('*', sessionMiddleware(ctx))
+app.use('*', requireSameOrigin(ctx.env.AUTH_TRUSTED_ORIGINS))
 
 app.get('/healthz', (c) => c.json({ ok: true }))
 app.get('/readyz', (c) => c.json({ ok: true }))
 
-// Mount better-auth (handles /api/auth/*).
-app.on(['POST', 'GET'], '/api/auth/*', (c) => ctx.auth.handler(c.req.raw))
+// Mount better-auth (handles /api/auth/*). Apply IP-based rate limits on the most-abused
+// flows (signup + signin) before delegating to better-auth — it doesn't enforce any.
+app.on(['POST', 'GET'], '/api/auth/*', async (c) => {
+  if (c.req.method === 'POST') {
+    if (c.req.path.endsWith('/sign-up/email')) await ctx.rateLimit(c, 'auth.signup')
+    else if (c.req.path.endsWith('/sign-in/email')) await ctx.rateLimit(c, 'auth.signin')
+  }
+  return ctx.auth.handler(c.req.raw)
+})
 
 app.route('/api/me', meRoute)
 app.route('/api/users', usersRoute)

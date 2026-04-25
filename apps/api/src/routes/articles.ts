@@ -55,7 +55,8 @@ function toArticleDto(
 
 articlesRoute.post('/', requireAuth(), async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'articles.write')
   const body = createArticleSchema.parse(await c.req.json())
 
   const baseSlug = body.slug ? slugify(body.slug) : slugify(body.title)
@@ -114,7 +115,8 @@ articlesRoute.post('/', requireAuth(), async (c) => {
 
 articlesRoute.patch('/:id', requireAuth(), async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'articles.write')
   const id = c.req.param('id')
   const body = updateArticleSchema.parse(await c.req.json())
 

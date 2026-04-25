@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 
 export type Theme = "light" | "dark" | "system"
 
-const STORAGE_KEY = "twotter.theme"
+const STORAGE_KEY = "app.theme"
 
 interface ThemeContextValue {
   theme: Theme

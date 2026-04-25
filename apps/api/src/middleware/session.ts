@@ -64,3 +64,27 @@ export function requireRole(...roles: Array<Role>): MiddlewareHandler<HonoEnv> {
 
 export const requireAdmin = () => requireRole('admin', 'owner')
 export const requireOwner = () => requireRole('owner')
+
+/**
+ * Reject mutating requests whose `Origin` header isn't in the trusted list. This makes bare
+ * curl/Postman writes fail by default — those clients omit the Origin header entirely. CORS
+ * already gates browser cross-origin reads; this closes the server-side gap for state changes.
+ *
+ * GETs / HEADs / OPTIONS are skipped (idempotent + needed for CORS preflight). OAuth callbacks
+ * (`/api/auth/callback/*`) are skipped because they're top-level navigations from external
+ * providers and won't carry an Origin header.
+ */
+export function requireSameOrigin(trustedOrigins: Array<string>): MiddlewareHandler<HonoEnv> {
+  const safeMethods = new Set(['GET', 'HEAD', 'OPTIONS'])
+  const trusted = new Set(trustedOrigins)
+  return async (c, next) => {
+    if (safeMethods.has(c.req.method)) return next()
+    const path = c.req.path
+    if (path.startsWith('/api/auth/callback/')) return next()
+    const origin = c.req.header('Origin')
+    if (!origin || !trusted.has(origin)) {
+      return c.json({ error: 'invalid_origin' }, 403)
+    }
+    await next()
+  }
+}

@@ -329,7 +329,8 @@ usersRoute.delete('/:handle/follow', requireAuth(), async (c) => {
 // Block / unblock (two-way hide). Also removes any follow edges in either direction.
 usersRoute.post('/:handle/block', requireAuth(), async (c) => {
   const session = c.get('session')!
-  const { db, cache } = c.get('ctx')
+  const { db, cache, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'users.block')
   const user = await resolveHandle(db, c.req.param('handle'))
   if (!user) return c.json({ error: 'not_found' }, 404)
   if (user.id === session.user.id) return c.json({ error: 'self_block' }, 400)
@@ -368,7 +369,8 @@ usersRoute.delete('/:handle/block', requireAuth(), async (c) => {
 // Mute / unmute (one-way).
 usersRoute.post('/:handle/mute', requireAuth(), async (c) => {
   const session = c.get('session')!
-  const { db, cache } = c.get('ctx')
+  const { db, cache, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'users.mute')
   const user = await resolveHandle(db, c.req.param('handle'))
   if (!user) return c.json({ error: 'not_found' }, 404)
   if (user.id === session.user.id) return c.json({ error: 'self_mute' }, 400)

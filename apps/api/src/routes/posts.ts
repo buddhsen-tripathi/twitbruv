@@ -542,7 +542,8 @@ postsRoute.get('/:id', async (c) => {
 // Edit (within 5 min of creation).
 postsRoute.patch('/:id', requireAuth(), async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'posts.edit')
   const id = c.req.param('id')
   const body = editPostSchema.parse(await c.req.json())
 
