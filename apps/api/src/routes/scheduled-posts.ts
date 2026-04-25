@@ -6,6 +6,7 @@ import {
   SCHEDULE_MIN_LEAD_SEC,
   SCHEDULE_MAX_LEAD_DAYS,
 } from '@workspace/validators'
+import { handleRateLimitError } from '@workspace/rate-limit'
 import { requireAuth, type HonoEnv } from '../middleware/session.ts'
 import { linkHashtags } from '../lib/hashtags.ts'
 import { linkMentions } from '../lib/mentions.ts'
@@ -43,7 +44,8 @@ scheduledPostsRoute.get('/', async (c) => {
 
 scheduledPostsRoute.post('/', async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'scheduled.write')
   const body = createScheduledPostSchema.parse(await c.req.json())
 
   validateSchedule(body.scheduledFor)
@@ -71,7 +73,8 @@ scheduledPostsRoute.post('/', async (c) => {
 
 scheduledPostsRoute.patch('/:id', async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'scheduled.write')
   const id = c.req.param('id')
   const body = updateScheduledPostSchema.parse(await c.req.json())
 
@@ -110,7 +113,8 @@ scheduledPostsRoute.patch('/:id', async (c) => {
 
 scheduledPostsRoute.delete('/:id', async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'scheduled.write')
   const id = c.req.param('id')
   await db
     .delete(schema.scheduledPosts)
@@ -128,7 +132,8 @@ scheduledPostsRoute.delete('/:id', async (c) => {
 // now" UI button on the drafts page, and by the worker when scheduledFor lapses.
 scheduledPostsRoute.post('/:id/publish', async (c) => {
   const session = c.get('session')!
-  const { db, cache } = c.get('ctx')
+  const { db, cache, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'scheduled.write')
   const id = c.req.param('id')
 
   const result = await publishScheduled(db, session.user.id, id)
@@ -271,6 +276,8 @@ class HttpError extends Error {
 }
 
 scheduledPostsRoute.onError((err, c) => {
+  const rl = handleRateLimitError(err, c)
+  if (rl) return rl
   if (err instanceof HttpError) return c.json({ error: err.code }, err.status as never)
   console.error(err)
   return c.json({ error: 'internal_error', message: err.message }, 500)

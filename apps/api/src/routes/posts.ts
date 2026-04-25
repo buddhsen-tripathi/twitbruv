@@ -2,6 +2,7 @@ import { Hono } from 'hono'
 import { and, asc, desc, eq, inArray, isNull, lt, sql } from '@workspace/db'
 import { schema } from '@workspace/db'
 import { createPostSchema, editPostSchema } from '@workspace/validators'
+import { handleRateLimitError } from '@workspace/rate-limit'
 import { requireAuth, type HonoEnv } from '../middleware/session.ts'
 import { toPostDto } from '../lib/post-dto.ts'
 import { loadViewerFlags } from '../lib/viewer-flags.ts'
@@ -662,7 +663,8 @@ postsRoute.patch('/:id', requireAuth(), async (c) => {
 // per author exists at a time. Reposts/replies/quotes can't be pinned — only originals.
 postsRoute.post('/:id/pin', requireAuth(), async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'posts.pin')
   const id = c.req.param('id')
   const me = session.user.id
 
@@ -688,7 +690,8 @@ postsRoute.post('/:id/pin', requireAuth(), async (c) => {
 
 postsRoute.delete('/:id/pin', requireAuth(), async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'posts.pin')
   const id = c.req.param('id')
   await db
     .update(schema.posts)
@@ -798,6 +801,8 @@ class HttpError extends Error {
 }
 
 postsRoute.onError((err, c) => {
+  const rl = handleRateLimitError(err, c)
+  if (rl) return rl
   if (err instanceof HttpError) return c.json({ error: err.code }, err.status as never)
   console.error(err)
   return c.json({ error: 'internal_error', message: err.message }, 500)

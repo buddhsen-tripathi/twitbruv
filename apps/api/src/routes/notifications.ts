@@ -135,7 +135,8 @@ notificationsRoute.get('/', async (c) => {
 
 notificationsRoute.post('/mark-read', async (c) => {
   const session = c.get('session')!
-  const { db, cache } = c.get('ctx')
+  const { db, cache, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'notifications.write')
   const body = (await c.req.json().catch(() => ({}))) as {
     ids?: Array<string>
     all?: boolean

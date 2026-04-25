@@ -79,7 +79,8 @@ listsRoute.get('/me', requireAuth(), async (c) => {
 
 listsRoute.post('/', requireAuth(), async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'lists.write')
   const body = createListSchema.parse(await c.req.json())
 
   const [me] = await db
@@ -133,7 +134,8 @@ listsRoute.get('/:id', async (c) => {
 
 listsRoute.patch('/:id', requireAuth(), async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'lists.write')
   const id = c.req.param('id')
   const body = updateListSchema.parse(await c.req.json())
 
@@ -159,7 +161,8 @@ listsRoute.patch('/:id', requireAuth(), async (c) => {
 
 listsRoute.delete('/:id', requireAuth(), async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'lists.write')
   const id = c.req.param('id')
   await db
     .delete(schema.userLists)
@@ -197,7 +200,8 @@ listsRoute.get('/:id/members', async (c) => {
 
 listsRoute.post('/:id/members', requireAuth(), async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'lists.members')
   const id = c.req.param('id')
   const body = await c.req.json().catch(() => ({}))
   const userIds: Array<string> = Array.isArray(body?.userIds) ? body.userIds : []
@@ -238,7 +242,8 @@ listsRoute.post('/:id/members', requireAuth(), async (c) => {
 
 listsRoute.delete('/:id/members/:memberId', requireAuth(), async (c) => {
   const session = c.get('session')!
-  const { db } = c.get('ctx')
+  const { db, rateLimit } = c.get('ctx')
+  await rateLimit(c, 'lists.members')
   const id = c.req.param('id')
   const memberId = c.req.param('memberId')
 

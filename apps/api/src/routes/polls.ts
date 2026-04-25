@@ -1,6 +1,7 @@
 import { Hono } from 'hono'
 import { and, eq, inArray, schema, sql } from '@workspace/db'
 import { pollVoteSchema } from '@workspace/validators'
+import { handleRateLimitError } from '@workspace/rate-limit'
 import { requireAuth, type HonoEnv } from '../middleware/session.ts'
 
 export const pollsRoute = new Hono<HonoEnv>()
@@ -12,7 +13,7 @@ pollsRoute.post('/:pollId/vote', requireAuth(), async (c) => {
   const session = c.get('session')!
   const { db, rateLimit } = c.get('ctx')
   const pollId = c.req.param('pollId')
-  await rateLimit(c, 'posts.like')
+  await rateLimit(c, 'polls.vote')
   const body = pollVoteSchema.parse(await c.req.json())
 
   await db.transaction(async (tx) => {
@@ -73,6 +74,8 @@ class HttpError extends Error {
 }
 
 pollsRoute.onError((err, c) => {
+  const rl = handleRateLimitError(err, c)
+  if (rl) return rl
   if (err instanceof HttpError) return c.json({ error: err.code }, err.status as never)
   console.error(err)
   return c.json({ error: 'internal_error', message: err.message }, 500)
