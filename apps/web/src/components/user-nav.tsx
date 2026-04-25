@@ -5,6 +5,7 @@ import {
   IconLogout,
   IconMoon,
   IconSettings,
+  IconShield,
   IconSun,
   IconUser,
 } from "@tabler/icons-react"
@@ -92,6 +93,12 @@ export function UserNav({ user }: { user: SelfUser }) {
           <IconChartBar size={16} stroke={1.75} />
           <span>Analytics</span>
         </DropdownMenuItem>
+        {(user.role === "admin" || user.role === "owner") && (
+          <DropdownMenuItem render={<Link to="/admin" />}>
+            <IconShield size={16} stroke={1.75} />
+            <span>Admin</span>
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem render={<Link to="/settings" />}>
           <IconSettings size={16} stroke={1.75} />
           <span>Settings</span>

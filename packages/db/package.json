@@ -9,7 +9,7 @@
     "./client": "./src/client.ts"
   },
   "scripts": {
-    "push": "drizzle-kit push --force",
+    "push": "drizzle-kit push",
     "studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit"
   },

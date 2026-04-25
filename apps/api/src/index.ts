@@ -16,6 +16,7 @@ import { articlesRoute } from './routes/articles.ts'
 import { notificationsRoute } from './routes/notifications.ts'
 import { analyticsRoute } from './routes/analytics.ts'
 import { dmsRoute } from './routes/dms.ts'
+import { adminRoute } from './routes/admin.ts'
 
 const ctx = await buildContext()
 const app = new Hono<HonoEnv>()
@@ -52,6 +53,7 @@ app.route('/api/articles', articlesRoute)
 app.route('/api/notifications', notificationsRoute)
 app.route('/api/analytics', analyticsRoute)
 app.route('/api/dms', dmsRoute)
+app.route('/api/admin', adminRoute)
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404))
 app.onError((err, c) => {

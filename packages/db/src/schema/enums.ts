@@ -1,6 +1,6 @@
 import { pgEnum } from 'drizzle-orm/pg-core'
 
-export const userRoleEnum = pgEnum('user_role', ['user', 'mod', 'admin'])
+export const userRoleEnum = pgEnum('user_role', ['user', 'admin', 'owner'])
 
 export const muteScopeEnum = pgEnum('mute_scope', ['feed', 'notifications', 'both'])
 

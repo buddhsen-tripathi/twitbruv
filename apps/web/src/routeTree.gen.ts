@@ -17,13 +17,17 @@ import { Route as LoginRouteImport } from './routes/login'
 import { Route as InboxRouteImport } from './routes/inbox'
 import { Route as BookmarksRouteImport } from './routes/bookmarks'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
+import { Route as AdminRouteImport } from './routes/admin'
 import { Route as HandleRouteImport } from './routes/$handle'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as InboxIndexRouteImport } from './routes/inbox.index'
+import { Route as AdminIndexRouteImport } from './routes/admin.index'
 import { Route as HandleIndexRouteImport } from './routes/$handle.index'
 import { Route as InboxConversationIdRouteImport } from './routes/inbox.$conversationId'
 import { Route as HashtagTagRouteImport } from './routes/hashtag.$tag'
 import { Route as ArticlesNewRouteImport } from './routes/articles.new'
+import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as AdminReportsRouteImport } from './routes/admin.reports'
 import { Route as HandleFollowingRouteImport } from './routes/$handle.following'
 import { Route as HandleFollowersRouteImport } from './routes/$handle.followers'
 import { Route as ArticlesIdEditRouteImport } from './routes/articles.$id.edit'
@@ -70,6 +74,11 @@ const AnalyticsRoute = AnalyticsRouteImport.update({
   path: '/analytics',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HandleRoute = HandleRouteImport.update({
   id: '/$handle',
   path: '/$handle',
@@ -84,6 +93,11 @@ const InboxIndexRoute = InboxIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => InboxRoute,
+} as any)
+const AdminIndexRoute = AdminIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => AdminRoute,
 } as any)
 const HandleIndexRoute = HandleIndexRouteImport.update({
   id: '/',
@@ -104,6 +118,16 @@ const ArticlesNewRoute = ArticlesNewRouteImport.update({
   id: '/articles/new',
   path: '/articles/new',
   getParentRoute: () => rootRouteImport,
+} as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/users',
+  path: '/users',
+  getParentRoute: () => AdminRoute,
+} as any)
+const AdminReportsRoute = AdminReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => AdminRoute,
 } as any)
 const HandleFollowingRoute = HandleFollowingRouteImport.update({
   id: '/following',
@@ -134,6 +158,7 @@ const HandleASlugRoute = HandleASlugRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/$handle': typeof HandleRouteWithChildren
+  '/admin': typeof AdminRouteWithChildren
   '/analytics': typeof AnalyticsRoute
   '/bookmarks': typeof BookmarksRoute
   '/inbox': typeof InboxRouteWithChildren
@@ -144,10 +169,13 @@ export interface FileRoutesByFullPath {
   '/signup': typeof SignupRoute
   '/$handle/followers': typeof HandleFollowersRoute
   '/$handle/following': typeof HandleFollowingRoute
+  '/admin/reports': typeof AdminReportsRoute
+  '/admin/users': typeof AdminUsersRoute
   '/articles/new': typeof ArticlesNewRoute
   '/hashtag/$tag': typeof HashtagTagRoute
   '/inbox/$conversationId': typeof InboxConversationIdRoute
   '/$handle/': typeof HandleIndexRoute
+  '/admin/': typeof AdminIndexRoute
   '/inbox/': typeof InboxIndexRoute
   '/$handle/a/$slug': typeof HandleASlugRoute
   '/$handle/p/$id': typeof HandlePIdRoute
@@ -164,10 +192,13 @@ export interface FileRoutesByTo {
   '/signup': typeof SignupRoute
   '/$handle/followers': typeof HandleFollowersRoute
   '/$handle/following': typeof HandleFollowingRoute
+  '/admin/reports': typeof AdminReportsRoute
+  '/admin/users': typeof AdminUsersRoute
   '/articles/new': typeof ArticlesNewRoute
   '/hashtag/$tag': typeof HashtagTagRoute
   '/inbox/$conversationId': typeof InboxConversationIdRoute
   '/$handle': typeof HandleIndexRoute
+  '/admin': typeof AdminIndexRoute
   '/inbox': typeof InboxIndexRoute
   '/$handle/a/$slug': typeof HandleASlugRoute
   '/$handle/p/$id': typeof HandlePIdRoute
@@ -177,6 +208,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/$handle': typeof HandleRouteWithChildren
+  '/admin': typeof AdminRouteWithChildren
   '/analytics': typeof AnalyticsRoute
   '/bookmarks': typeof BookmarksRoute
   '/inbox': typeof InboxRouteWithChildren
@@ -187,10 +219,13 @@ export interface FileRoutesById {
   '/signup': typeof SignupRoute
   '/$handle/followers': typeof HandleFollowersRoute
   '/$handle/following': typeof HandleFollowingRoute
+  '/admin/reports': typeof AdminReportsRoute
+  '/admin/users': typeof AdminUsersRoute
   '/articles/new': typeof ArticlesNewRoute
   '/hashtag/$tag': typeof HashtagTagRoute
   '/inbox/$conversationId': typeof InboxConversationIdRoute
   '/$handle/': typeof HandleIndexRoute
+  '/admin/': typeof AdminIndexRoute
   '/inbox/': typeof InboxIndexRoute
   '/$handle/a/$slug': typeof HandleASlugRoute
   '/$handle/p/$id': typeof HandlePIdRoute
@@ -201,6 +236,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/$handle'
+    | '/admin'
     | '/analytics'
     | '/bookmarks'
     | '/inbox'
@@ -211,10 +247,13 @@ export interface FileRouteTypes {
     | '/signup'
     | '/$handle/followers'
     | '/$handle/following'
+    | '/admin/reports'
+    | '/admin/users'
     | '/articles/new'
     | '/hashtag/$tag'
     | '/inbox/$conversationId'
     | '/$handle/'
+    | '/admin/'
     | '/inbox/'
     | '/$handle/a/$slug'
     | '/$handle/p/$id'
@@ -231,10 +270,13 @@ export interface FileRouteTypes {
     | '/signup'
     | '/$handle/followers'
     | '/$handle/following'
+    | '/admin/reports'
+    | '/admin/users'
     | '/articles/new'
     | '/hashtag/$tag'
     | '/inbox/$conversationId'
     | '/$handle'
+    | '/admin'
     | '/inbox'
     | '/$handle/a/$slug'
     | '/$handle/p/$id'
@@ -243,6 +285,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/$handle'
+    | '/admin'
     | '/analytics'
     | '/bookmarks'
     | '/inbox'
@@ -253,10 +296,13 @@ export interface FileRouteTypes {
     | '/signup'
     | '/$handle/followers'
     | '/$handle/following'
+    | '/admin/reports'
+    | '/admin/users'
     | '/articles/new'
     | '/hashtag/$tag'
     | '/inbox/$conversationId'
     | '/$handle/'
+    | '/admin/'
     | '/inbox/'
     | '/$handle/a/$slug'
     | '/$handle/p/$id'
@@ -266,6 +312,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   HandleRoute: typeof HandleRouteWithChildren
+  AdminRoute: typeof AdminRouteWithChildren
   AnalyticsRoute: typeof AnalyticsRoute
   BookmarksRoute: typeof BookmarksRoute
   InboxRoute: typeof InboxRouteWithChildren
@@ -337,6 +384,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AnalyticsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/$handle': {
       id: '/$handle'
       path: '/$handle'
@@ -357,6 +411,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/inbox/'
       preLoaderRoute: typeof InboxIndexRouteImport
       parentRoute: typeof InboxRoute
+    }
+    '/admin/': {
+      id: '/admin/'
+      path: '/'
+      fullPath: '/admin/'
+      preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/$handle/': {
       id: '/$handle/'
@@ -385,6 +446,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/articles/new'
       preLoaderRoute: typeof ArticlesNewRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof AdminRoute
+    }
+    '/admin/reports': {
+      id: '/admin/reports'
+      path: '/reports'
+      fullPath: '/admin/reports'
+      preLoaderRoute: typeof AdminReportsRouteImport
+      parentRoute: typeof AdminRoute
     }
     '/$handle/following': {
       id: '/$handle/following'
@@ -443,6 +518,20 @@ const HandleRouteChildren: HandleRouteChildren = {
 const HandleRouteWithChildren =
   HandleRoute._addFileChildren(HandleRouteChildren)
 
+interface AdminRouteChildren {
+  AdminReportsRoute: typeof AdminReportsRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+  AdminIndexRoute: typeof AdminIndexRoute
+}
+
+const AdminRouteChildren: AdminRouteChildren = {
+  AdminReportsRoute: AdminReportsRoute,
+  AdminUsersRoute: AdminUsersRoute,
+  AdminIndexRoute: AdminIndexRoute,
+}
+
+const AdminRouteWithChildren = AdminRoute._addFileChildren(AdminRouteChildren)
+
 interface InboxRouteChildren {
   InboxConversationIdRoute: typeof InboxConversationIdRoute
   InboxIndexRoute: typeof InboxIndexRoute
@@ -458,6 +547,7 @@ const InboxRouteWithChildren = InboxRoute._addFileChildren(InboxRouteChildren)
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   HandleRoute: HandleRouteWithChildren,
+  AdminRoute: AdminRouteWithChildren,
   AnalyticsRoute: AnalyticsRoute,
   BookmarksRoute: BookmarksRoute,
   InboxRoute: InboxRouteWithChildren,

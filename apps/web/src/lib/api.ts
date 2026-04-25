@@ -166,6 +166,56 @@ export const api = {
   repost: (id: string) => request<{ ok: true }>(`/api/posts/${id}/repost`, { method: "POST" }),
   unrepost: (id: string) =>
     request<{ ok: true }>(`/api/posts/${id}/repost`, { method: "DELETE" }),
+
+  adminUsers: (q?: string, cursor?: string) => {
+    const params = new URLSearchParams()
+    if (q) params.set("q", q)
+    if (cursor) params.set("cursor", cursor)
+    return request<{ users: Array<AdminUser>; nextCursor: string | null }>(
+      `/api/admin/users${params.toString() ? `?${params.toString()}` : ""}`,
+    )
+  },
+  adminUser: (id: string) => request<AdminUserDetail>(`/api/admin/users/${id}`),
+  adminBan: (id: string, body: { reason?: string; durationHours?: number }) =>
+    request<{ ok: true }>(`/api/admin/users/${id}/ban`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  adminUnban: (id: string) =>
+    request<{ ok: true }>(`/api/admin/users/${id}/unban`, { method: "POST" }),
+  adminShadowban: (id: string, body: { reason?: string }) =>
+    request<{ ok: true }>(`/api/admin/users/${id}/shadowban`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  adminUnshadowban: (id: string) =>
+    request<{ ok: true }>(`/api/admin/users/${id}/unshadowban`, { method: "POST" }),
+  adminSetRole: (id: string, role: "user" | "admin" | "owner") =>
+    request<{ ok: true }>(`/api/admin/users/${id}/role`, {
+      method: "POST",
+      body: JSON.stringify({ role }),
+    }),
+  adminReports: (status?: ReportStatus, cursor?: string) => {
+    const params = new URLSearchParams()
+    if (status) params.set("status", status)
+    if (cursor) params.set("cursor", cursor)
+    return request<{ reports: Array<AdminReport>; nextCursor: string | null }>(
+      `/api/admin/reports${params.toString() ? `?${params.toString()}` : ""}`,
+    )
+  },
+  adminResolveReport: (
+    id: string,
+    body: { status: "triaged" | "actioned" | "dismissed"; resolutionNote?: string },
+  ) =>
+    request<{ ok: true }>(`/api/admin/reports/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(body),
+    }),
+  adminDeletePost: (id: string, body: { reason?: string; reportId?: string } = {}) =>
+    request<{ ok: true }>(`/api/admin/posts/${id}`, {
+      method: "DELETE",
+      body: JSON.stringify(body),
+    }),
 }
 
 export interface Post {
@@ -284,7 +334,7 @@ export interface SelfUser {
   birthday: string | null
   isVerified: boolean
   isBot: boolean
-  role: "user" | "mod" | "admin"
+  role: "user" | "admin" | "owner"
   locale: string
   timezone: string | null
   createdAt: string
@@ -404,6 +454,69 @@ export interface DmMessage {
   editedAt: string | null
   createdAt: string
   sender?: DmMember
+}
+
+export type ReportStatus = "open" | "triaged" | "actioned" | "dismissed"
+
+export interface AdminUser {
+  id: string
+  email: string
+  handle: string | null
+  displayName: string | null
+  avatarUrl: string | null
+  role: "user" | "admin" | "owner"
+  banned: boolean
+  banReason: string | null
+  banExpires: string | null
+  shadowBannedAt: string | null
+  deletedAt: string | null
+  createdAt: string
+}
+
+export interface AdminUserDetail {
+  user: AdminUser & { bio: string | null; bannerUrl: string | null }
+  recentPosts: Array<{
+    id: string
+    text: string
+    createdAt: string
+    deletedAt: string | null
+    sensitive: boolean
+    replyToId: string | null
+  }>
+  reports: Array<{
+    id: string
+    reporterId: string
+    reason: string
+    details: string | null
+    status: ReportStatus
+    createdAt: string
+  }>
+  actions: Array<{
+    id: string
+    moderatorId: string | null
+    action: string
+    publicReason: string | null
+    privateNote: string | null
+    durationHours: number | null
+    createdAt: string
+  }>
+}
+
+export interface AdminReport {
+  id: string
+  subjectType: string
+  subjectId: string
+  reason: string
+  details: string | null
+  status: ReportStatus
+  createdAt: string
+  resolvedAt: string | null
+  reporter: {
+    id: string
+    handle: string | null
+    displayName: string | null
+    avatarUrl: string | null
+  } | null
 }
 
 export interface AnalyticsOverview {
