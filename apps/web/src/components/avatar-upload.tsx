@@ -71,7 +71,7 @@ export function AvatarUpload({
         {currentUrl && !uploading && (
           <Button
             variant="ghost"
-            size="icon"
+            size="sm"
             onClick={() => onChange(null)}
             className="mt-1 self-start text-destructive hover:underline"
           >
