@@ -23,7 +23,16 @@ const ctx = await buildContext()
 const app = new Hono<HonoEnv>()
 
 app.use('*', logger())
-app.use('*', secureHeaders())
+app.use(
+  '*',
+  secureHeaders({
+    // CORP/COEP block legitimate cross-origin loads (the web app pulling images and JSON from
+    // this API). Cross-origin access control is enforced by the CORS middleware below; turning
+    // these off avoids browser-level blocks on `<img src="https://api.../api/m/...">`.
+    crossOriginResourcePolicy: false,
+    crossOriginEmbedderPolicy: false,
+  }),
+)
 app.use(
   '*',
   cors({
@@ -71,10 +80,6 @@ app.get('/api/m/*', async (c) => {
     key,
     expiresInSeconds: 60 * 60,
   })
-  // secureHeaders() defaults to `Cross-Origin-Resource-Policy: same-origin`, which makes the
-  // browser refuse to load the redirect from a different origin (`<img>` on the web app).
-  // Override here — this endpoint is intentionally cross-origin.
-  c.header('Cross-Origin-Resource-Policy', 'cross-origin')
   // Signing is microseconds; keep the redirect cache short so a bad deploy doesn't poison
   // browser caches for ages, but long enough to skip re-signing during a single page paint.
   c.header('Cache-Control', 'public, max-age=30')
