@@ -244,17 +244,11 @@ export function PostCard({
   post: outerPost,
   onChange,
   onRemove,
-  onOpenThread,
-  active = false,
-  disableThreadNavigation = false,
   canHide = false,
 }: {
   post: Post
   onChange?: (post: Post) => void
   onRemove?: (id: string) => void
-  onOpenThread?: (post: Post) => void
-  active?: boolean
-  disableThreadNavigation?: boolean
   /** When true (set by the thread page when the viewer authored the conversation
    *  root, or by admin tooling for moderators), expose Hide/Unhide reply menu items. */
   canHide?: boolean
@@ -322,7 +316,7 @@ export function PostCard({
   const [historyOpen, setHistoryOpen] = useState(false)
   const authorHandle = post.author.handle
   const showProfileLink = Boolean(authorHandle)
-  const showPostLink = Boolean(authorHandle && !disableThreadNavigation)
+  const showPostLink = Boolean(authorHandle)
   const canEdit =
     isOwner && Date.now() - new Date(post.createdAt).getTime() < EDIT_WINDOW_MS
 
@@ -432,13 +426,8 @@ export function PostCard({
     .slice(0, 1)
     .toUpperCase()
 
-  function openThread() {
-    if (disableThreadNavigation) return
+  function openPostPage() {
     if (!authorHandle) return
-    if (onOpenThread) {
-      onOpenThread(post)
-      return
-    }
     navigate({
       to: "/$handle/p/$id",
       params: { handle: authorHandle, id: post.id },
@@ -448,7 +437,7 @@ export function PostCard({
   return (
     <article
       ref={articleRef}
-      className={`border-b border-border px-4 py-4 transition-colors ${active ? "bg-muted/20" : "hover:bg-muted/20"}`}
+      className="border-b border-border px-4 py-4 transition-colors hover:bg-muted/20"
     >
       {outerPost.pinned && (
         <div className="mb-2 ml-10 flex items-center gap-1.5 text-xs text-muted-foreground">
@@ -494,15 +483,11 @@ export function PostCard({
         </div>
 
         <div
-          className={`min-w-0 flex-1 ${authorHandle && !disableThreadNavigation ? "cursor-pointer" : ""}`}
+          className={`min-w-0 flex-1${authorHandle ? " cursor-pointer" : ""}`}
           onClick={(event) => {
-            if (
-              !authorHandle ||
-              disableThreadNavigation ||
-              clickedInteractiveElement(event.target)
-            )
-              return
-            openThread()
+            if (!authorHandle) return
+            if (clickedInteractiveElement(event.target)) return
+            openPostPage()
           }}
         >
           <header className="flex items-center gap-2 text-sm">

@@ -51,8 +51,6 @@ export function Feed({
   prependItem,
   hideReplies = false,
   onlyReplies = false,
-  onOpenThread,
-  activePostId,
   renderActivityBanner,
 }: {
   queryKey: FeedQueryKey
@@ -61,8 +59,6 @@ export function Feed({
   prependItem?: Post | null
   hideReplies?: boolean
   onlyReplies?: boolean
-  onOpenThread?: (post: Post) => void
-  activePostId?: string
   /** Optional banner rendered above each post card (e.g. "Lucas liked this"
    *  on the network feed). Returning null skips the banner for that row. */
   renderActivityBanner?: (post: Post) => React.ReactNode
@@ -171,15 +167,7 @@ export function Feed({
         {banner && (
           <div className="border-b border-border/50 px-4 pt-2">{banner}</div>
         )}
-        <PostCard
-          post={post}
-          onChange={replace}
-          onRemove={remove}
-          onOpenThread={onOpenThread}
-          active={
-            activePostId === post.id || activePostId === post.repostOf?.id
-          }
-        />
+        <PostCard post={post} onChange={replace} onRemove={remove} />
       </>
     )
   }

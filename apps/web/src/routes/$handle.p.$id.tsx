@@ -24,23 +24,8 @@ import { APP_NAME } from "../lib/env"
 import { buildSeoMeta, canonicalLink, clipDescription } from "../lib/seo"
 import type { Post, Thread } from "../lib/api"
 
-type ThreadSearch = {
-  from?: "home"
-  homePostId?: string
-  homePostHandle?: string
-}
-
 export const Route = createFileRoute("/$handle/p/$id")({
   component: ThreadView,
-  validateSearch: (search: Record<string, unknown>): ThreadSearch => ({
-    from: search.from === "home" ? "home" : undefined,
-    homePostId:
-      typeof search.homePostId === "string" ? search.homePostId : undefined,
-    homePostHandle:
-      typeof search.homePostHandle === "string"
-        ? search.homePostHandle
-        : undefined,
-  }),
   loader: async ({ params }) => {
     try {
       const { post } = await api.post(params.id)
