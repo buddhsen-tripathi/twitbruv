@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 
-const base = "mx-auto w-full min-w-0 md:max-w-[640px] md:border-x border-border"
+const base =
+  "mx-auto w-full min-w-0 md:max-w-[640px] md:border-x border-border md:border-b"
 
 export function PageFrame({
   children,
