@@ -117,6 +117,22 @@ function ProfileSection() {
     setWebsiteUrl(me.websiteUrl ?? "")
   }, [me])
 
+  // After the page renders with the user's data, honor the URL hash
+  // (e.g. /settings#profile from the "Edit profile" button) by scrolling
+  // the matching section into view and focusing the first input in it.
+  useEffect(() => {
+    if (!me || typeof window === "undefined") return
+    const id = window.location.hash.slice(1)
+    if (!id) return
+    const el = document.getElementById(id)
+    if (!el) return
+    el.scrollIntoView({ behavior: "smooth", block: "start" })
+    const firstInput = el.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      "input, textarea",
+    )
+    firstInput?.focus({ preventScroll: true })
+  }, [me])
+
   if (!me) return null
 
   async function onSave(e: React.FormEvent) {
@@ -178,7 +194,7 @@ function ProfileSection() {
         />
       </section>
 
-      <form onSubmit={onSave} className="space-y-3 border-t border-border pt-6">
+      <form onSubmit={onSave} id="profile" className="scroll-mt-4 space-y-3 border-t border-border pt-6">
         <h2 className="text-sm font-semibold">Profile details</h2>
         <div className="space-y-1">
           <Label htmlFor="displayName">Display name</Label>
