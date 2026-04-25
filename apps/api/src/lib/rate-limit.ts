@@ -5,6 +5,7 @@ import {
   type FixedWindowLimit,
 } from '@workspace/rate-limit'
 import type { HonoEnv } from '../middleware/session.ts'
+import type { Logger } from './logger.ts'
 
 const MIN = 60 * 1000
 const HOUR = 60 * MIN
@@ -115,8 +116,9 @@ export interface RateLimitChecker {
   (c: Context<HonoEnv>, bucket: BucketName): Promise<void>
 }
 
-export function makeRateLimit(redisUrl: string): RateLimitChecker {
+export function makeRateLimit(redisUrl: string, log: Logger): RateLimitChecker {
   const limiter = new RateLimiter({ redis: createRedisClient(redisUrl) })
+  const rlLog = log.child({ scope: 'rate-limit' })
 
   return async function check(c, bucket) {
     const windows = BUCKETS[bucket]
@@ -126,13 +128,32 @@ export function makeRateLimit(redisUrl: string): RateLimitChecker {
       c.req.header('x-forwarded-for')?.split(',')[0]?.trim() ??
       'anon'
 
+    // Per window: logs and re-throws Redis errors, logs and throws RateLimitError on denial,
+    // logs and sets X-RateLimit-Remaining on success.
     for (const window of windows) {
       const key = `${bucket}:${subject}:${window.windowMs}`
-      const result = await limiter.check(key, window)
+      let result: Awaited<ReturnType<typeof limiter.check>>
+      try {
+        result = await limiter.check(key, window)
+      } catch (err) {
+        rlLog.error(
+          { err: err instanceof Error ? err.message : err, bucket, subject, windowMs: window.windowMs },
+          'rl_redis_error',
+        )
+        throw err
+      }
       if (!result.allowed) {
         const retryAfterSec = Math.max(1, Math.ceil((result.resetAt - Date.now()) / 1000))
+        rlLog.warn(
+          { bucket, subject, windowMs: window.windowMs, retryAfterSec },
+          'rl_block',
+        )
         throw new RateLimitError(bucket, retryAfterSec, result.resetAt)
       }
+      rlLog.debug(
+        { bucket, subject, windowMs: window.windowMs, remaining: result.remaining },
+        'rl_check',
+      )
       c.header('X-RateLimit-Remaining', String(result.remaining))
     }
   }
