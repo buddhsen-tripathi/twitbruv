@@ -8,10 +8,18 @@ export function Feed({
   load,
   emptyMessage = "Nothing here yet.",
   prependItem,
+  hideReplies = false,
+  onlyReplies = false,
+  onOpenThread,
+  activePostId,
 }: {
   load: (cursor?: string) => Promise<FeedPage>
   emptyMessage?: string
   prependItem?: Post | null
+  hideReplies?: boolean
+  onlyReplies?: boolean
+  onOpenThread?: (post: Post) => void
+  activePostId?: string
 }) {
   const [posts, setPosts] = useState<Array<Post>>([])
   const [cursor, setCursor] = useState<string | null>(null)
@@ -19,13 +27,19 @@ export function Feed({
   const [error, setError] = useState<string | null>(null)
   const [loadingMore, setLoadingMore] = useState(false)
 
+  const filterPosts = (posts: Array<Post>) => {
+    if (hideReplies) return posts.filter((p) => !p.replyToId)
+    if (onlyReplies) return posts.filter((p) => p.replyToId)
+    return posts
+  }
+
   useEffect(() => {
     let cancel = false
     setLoading(true)
     load()
       .then((page) => {
         if (cancel) return
-        setPosts(page.posts)
+        setPosts(filterPosts(page.posts))
         setCursor(page.nextCursor)
       })
       .catch((e) => {
@@ -37,7 +51,7 @@ export function Feed({
     return () => {
       cancel = true
     }
-  }, [load])
+  }, [hideReplies, load, onlyReplies])
 
   useEffect(() => {
     if (!prependItem) return
@@ -51,7 +65,7 @@ export function Feed({
     setLoadingMore(true)
     try {
       const page = await load(cursor)
-      setPosts((prev) => [...prev, ...page.posts])
+      setPosts((prev) => [...prev, ...filterPosts(page.posts)])
       setCursor(page.nextCursor)
     } finally {
       setLoadingMore(false)
@@ -90,6 +104,8 @@ export function Feed({
           post={post}
           onChange={replace}
           onRemove={remove}
+          onOpenThread={onOpenThread}
+          active={activePostId === post.id || activePostId === post.repostOf?.id}
         />
       ))}
       {cursor && (
