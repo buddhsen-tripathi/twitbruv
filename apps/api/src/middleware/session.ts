@@ -1,5 +1,5 @@
 import type { MiddlewareHandler } from 'hono'
-import { setCookie } from 'hono/cookie'
+import { deleteCookie, setCookie } from 'hono/cookie'
 import { eq, schema } from '@workspace/db'
 import type { AppContext } from '../lib/context.ts'
 import {
@@ -70,6 +70,15 @@ export function sessionMiddleware(ctx: AppContext): MiddlewareHandler<HonoEnv> {
           ...(ctx.env.AUTH_COOKIE_DOMAIN ? { domain: ctx.env.AUTH_COOKIE_DOMAIN } : {}),
         },
       )
+    } else if (c.req.header('cookie')?.includes(`${CSRF_COOKIE_NAME}=`)) {
+      // Session is gone (logout, expiry, ban) but the client still holds a stale CSRF cookie
+      // tied to the old session id. Clear it so the next login bootstraps cleanly without a
+      // first-mutation 403. Skipped for fully-anonymous traffic to avoid Set-Cookie noise on
+      // federation/crawler requests.
+      deleteCookie(c, CSRF_COOKIE_NAME, {
+        path: '/',
+        ...(ctx.env.AUTH_COOKIE_DOMAIN ? { domain: ctx.env.AUTH_COOKIE_DOMAIN } : {}),
+      })
     }
     await next()
   }

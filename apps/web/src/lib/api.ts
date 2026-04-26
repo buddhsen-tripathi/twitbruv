@@ -43,7 +43,10 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   if (anonId) trackingHeaders["X-Db-Anon-Id"] = anonId
   if (sessionId) trackingHeaders["X-Db-Session-Id"] = sessionId
 
+  // Spread init first so caller-supplied keys can be overridden — otherwise passing
+  // `{ headers: ... }` from a caller would silently strip Content-Type, CSRF, and tracking.
   const res = await fetch(`${API_URL}${path}`, {
+    ...init,
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
@@ -51,7 +54,6 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...trackingHeaders,
       ...(init?.headers ?? {}),
     },
-    ...init,
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "unknown" }))

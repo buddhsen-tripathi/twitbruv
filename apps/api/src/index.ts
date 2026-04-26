@@ -88,7 +88,15 @@ app.use(
   cors({
     origin: ctx.env.AUTH_TRUSTED_ORIGINS,
     credentials: true,
-    allowHeaders: ['Content-Type', 'Authorization', 'X-Db-Anon-Id', 'X-Db-Session-Id'],
+    // Custom headers must be allowlisted here or the preflight strips them and the browser
+    // drops the request. X-CSRF-Token is required on every mutating browser fetch.
+    allowHeaders: [
+      'Content-Type',
+      'Authorization',
+      'X-CSRF-Token',
+      'X-Db-Anon-Id',
+      'X-Db-Session-Id',
+    ],
     allowMethods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
     exposeHeaders: ['Set-Cookie'],
     maxAge: 86400,

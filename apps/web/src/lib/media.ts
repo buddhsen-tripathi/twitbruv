@@ -39,14 +39,16 @@ async function json<T>(path: string, init?: RequestInit): Promise<T> {
     const token = readCsrfToken()
     if (token) csrfHeader["X-CSRF-Token"] = token
   }
+  // Spread init first so caller-supplied keys can be overridden — otherwise passing
+  // `{ headers: ... }` from a caller would silently strip Content-Type and CSRF.
   const res = await fetch(`${API_URL}${path}`, {
+    ...init,
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
       ...csrfHeader,
       ...(init?.headers ?? {}),
     },
-    ...init,
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({ error: "unknown" }))
