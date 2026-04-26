@@ -6,7 +6,6 @@ import {
   SCHEDULE_MIN_LEAD_SEC,
   SCHEDULE_MAX_LEAD_DAYS,
 } from '@workspace/validators'
-import { handleRateLimitError } from '@workspace/rate-limit'
 import { requireAuth, type HonoEnv } from '../middleware/session.ts'
 import { linkHashtags } from '../lib/hashtags.ts'
 import { linkMentions } from '../lib/mentions.ts'
@@ -276,9 +275,6 @@ class HttpError extends Error {
 }
 
 scheduledPostsRoute.onError((err, c) => {
-  const rl = handleRateLimitError(err, c)
-  if (rl) return rl
   if (err instanceof HttpError) return c.json({ error: err.code }, err.status as never)
-  console.error(err)
-  return c.json({ error: 'internal_error', message: err.message }, 500)
+  throw err
 })

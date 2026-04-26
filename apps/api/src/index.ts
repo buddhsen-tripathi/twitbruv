@@ -2,10 +2,11 @@ import { Hono } from 'hono'
 import { compress } from 'hono/compress'
 import { cors } from 'hono/cors'
 import { etag } from 'hono/etag'
+import { requestId } from 'hono/request-id'
 import { secureHeaders } from 'hono/secure-headers'
 import { sql } from '@workspace/db'
 import { buildContext } from './lib/context.ts'
-import { handleRateLimitError } from '@workspace/rate-limit'
+import { renderError } from './lib/errors.ts'
 import { requireSameOrigin, sessionMiddleware, type HonoEnv } from './middleware/session.ts'
 import { meRoute } from './routes/me.ts'
 import { usersRoute } from './routes/users.ts'
@@ -32,6 +33,11 @@ import { chessRoute } from './routes/chess.ts'
 const ctx = await buildContext()
 const app = new Hono<HonoEnv>()
 
+// Generate or accept an inbound X-Request-Id and expose it via c.get('requestId'). Mounted
+// before the logger so every log line and the renderError response carries the same id —
+// users quoting it in support tickets lets us correlate without leaking internals.
+app.use('*', requestId())
+
 // Structured request log via pino. JSON in production, pretty in dev. Skip the noisy media
 // proxy + healthcheck — every page paint hits those and they'd swamp logs.
 app.use('*', async (c, next) => {
@@ -40,7 +46,13 @@ app.use('*', async (c, next) => {
   const path = c.req.path
   if (path === '/healthz' || path === '/readyz' || path.startsWith('/api/m/')) return
   ctx.log.info(
-    { method: c.req.method, path, status: c.res.status, ms: Date.now() - start },
+    {
+      method: c.req.method,
+      path,
+      status: c.res.status,
+      ms: Date.now() - start,
+      reqId: c.get('requestId'),
+    },
     'req',
   )
 })
@@ -210,12 +222,7 @@ app.route('/api/connectors/github', githubConnectorRoute)
 app.route('/api/chess', chessRoute)
 
 app.notFound((c) => c.json({ error: 'not_found' }, 404))
-app.onError((err, c) => {
-  const rateLimited = handleRateLimitError(err, c)
-  if (rateLimited) return rateLimited
-  ctx.log.error({ err: err instanceof Error ? err.stack ?? err.message : err, path: c.req.path }, 'unhandled_error')
-  return c.json({ error: 'internal_error', message: err.message }, 500)
-})
+app.onError((err, c) => renderError(err, c))
 
 const port = ctx.env.PORT
 ctx.log.info({ port }, 'api_listening')

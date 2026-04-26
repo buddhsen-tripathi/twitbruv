@@ -11,6 +11,8 @@ export type HonoEnv = {
       user: { id: string; email: string; role: Role; banned: boolean }
       session: { id: string }
     } | null
+    // Set by hono/request-id; mounted globally in apps/api/src/index.ts.
+    requestId: string
   }
 }
 

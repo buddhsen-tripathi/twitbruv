@@ -2,7 +2,6 @@ import { Hono } from 'hono'
 import { and, desc, eq, isNull, lt } from '@workspace/db'
 import { schema } from '@workspace/db'
 import { createArticleSchema, updateArticleSchema } from '@workspace/validators'
-import { handleRateLimitError } from '@workspace/rate-limit'
 import { assetUrl } from '@workspace/media/s3'
 import type { MediaEnv } from '@workspace/media/env'
 import { requireAuth, type HonoEnv } from '../middleware/session.ts'
@@ -275,11 +274,8 @@ class HttpError extends Error {
 }
 
 articlesRoute.onError((err, c) => {
-  const rl = handleRateLimitError(err, c)
-  if (rl) return rl
   if (err instanceof HttpError) return c.json({ error: err.code }, err.status as never)
-  console.error(err)
-  return c.json({ error: 'internal_error', message: err.message }, 500)
+  throw err
 })
 
 // Also surface a viewer-focused "my articles" list for the editor dashboard.
