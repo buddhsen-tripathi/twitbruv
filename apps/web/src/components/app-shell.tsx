@@ -15,7 +15,7 @@ import {
   DialogTitle,
 } from "@workspace/ui/components/dialog"
 import { Button } from "@workspace/ui/components/button"
-import { useEffect } from "react"
+import { useEffect, useRef } from "react"
 import { authClient } from "../lib/auth"
 import { api } from "../lib/api"
 import { AppPageHeaderProvider } from "./app-page-header"
@@ -56,9 +56,13 @@ export function AppShell({ children }: { children: ReactNode }) {
 function SidebarCloseOnNavigate() {
   const router = useRouter()
   const { setOpenMobile } = useSidebar()
+  const lastPath = useRef(router.state.location.pathname)
 
   useEffect(() => {
     return router.subscribe("onResolved", () => {
+      const next = router.state.location.pathname
+      if (next === lastPath.current) return
+      lastPath.current = next
       setOpenMobile(false)
     })
   }, [router, setOpenMobile])
