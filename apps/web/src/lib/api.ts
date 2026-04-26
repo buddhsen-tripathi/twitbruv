@@ -13,11 +13,35 @@ export class ApiError extends Error {
   }
 }
 
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"])
+
+// Read the CSRF token cookie set by the API on every authenticated request. SameSite=Strict
+// + not httpOnly so the browser sends it back AND we can read it here to mirror it as a
+// header — that header is what the API actually validates (the cookie alone proves nothing).
+// Exported so other raw-fetch call sites in the web app (analytics, media uploads) can mirror
+// the header without going through `request()`.
+export function readCsrfToken(): string | undefined {
+  if (typeof document === "undefined") return undefined
+  for (const part of document.cookie.split("; ")) {
+    if (part.startsWith("twotter_csrf=")) {
+      return decodeURIComponent(part.slice("twotter_csrf=".length))
+    }
+  }
+  return undefined
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase()
+  const csrfHeader: Record<string, string> = {}
+  if (!SAFE_METHODS.has(method)) {
+    const token = readCsrfToken()
+    if (token) csrfHeader["X-CSRF-Token"] = token
+  }
   const res = await fetch(`${API_URL}${path}`, {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      ...csrfHeader,
       ...(init?.headers ?? {}),
     },
     ...init,

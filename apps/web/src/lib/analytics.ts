@@ -1,6 +1,7 @@
 import { track } from "@databuddy/sdk"
 
 import { API_URL } from "./env"
+import { readCsrfToken } from "./api"
 
 export { track }
 
@@ -95,11 +96,15 @@ async function flush() {
   flushTimer = null
   if (buffer.length === 0) return
   const events = buffer.splice(0, buffer.length)
+  const csrf = readCsrfToken()
   try {
     await fetch(`${API_URL}/api/analytics/ingest`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(csrf ? { "X-CSRF-Token": csrf } : {}),
+      },
       body: JSON.stringify({ events }),
       keepalive: true,
     })
@@ -117,20 +122,13 @@ export function recordImpression(event: ImpressionEvent) {
   schedule()
 }
 
-// Flush on pagehide / visibilitychange using sendBeacon so nothing gets dropped on nav.
+// Flush on pagehide / beforeunload via the same keepalive fetch path. We can't use
+// navigator.sendBeacon — it doesn't support custom headers and CSRF requires X-CSRF-Token.
+// keepalive fetch survives page unload up to ~64KB (same budget as sendBeacon).
 if (typeof window !== "undefined") {
-  const beacon = () => {
-    if (buffer.length === 0) return
-    const events = buffer.splice(0, buffer.length)
-    try {
-      const blob = new Blob([JSON.stringify({ events })], {
-        type: "application/json",
-      })
-      navigator.sendBeacon(`${API_URL}/api/analytics/ingest`, blob)
-    } catch {
-      /* ignore */
-    }
+  const onUnload = () => {
+    void flush()
   }
-  window.addEventListener("pagehide", beacon)
-  window.addEventListener("beforeunload", beacon)
+  window.addEventListener("pagehide", onUnload)
+  window.addEventListener("beforeunload", onUnload)
 }

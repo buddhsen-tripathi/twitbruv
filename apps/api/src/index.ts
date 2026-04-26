@@ -7,7 +7,12 @@ import { secureHeaders } from 'hono/secure-headers'
 import { sql } from '@workspace/db'
 import { buildContext } from './lib/context.ts'
 import { renderError } from './lib/errors.ts'
-import { requireSameOrigin, sessionMiddleware, type HonoEnv } from './middleware/session.ts'
+import {
+  requireCsrf,
+  requireSameOrigin,
+  sessionMiddleware,
+  type HonoEnv,
+} from './middleware/session.ts'
 import { meRoute } from './routes/me.ts'
 import { usersRoute } from './routes/users.ts'
 import { postsRoute } from './routes/posts.ts'
@@ -91,6 +96,7 @@ app.use(
 )
 app.use('*', sessionMiddleware(ctx))
 app.use('*', requireSameOrigin(ctx.env.AUTH_TRUSTED_ORIGINS))
+app.use('*', requireCsrf())
 
 // Liveness: process is up. Kept cheap so Railway can hammer it.
 app.get('/healthz', (c) => c.json({ ok: true }))

@@ -1,6 +1,13 @@
 import type { MiddlewareHandler } from 'hono'
+import { setCookie } from 'hono/cookie'
 import { eq, schema } from '@workspace/db'
 import type { AppContext } from '../lib/context.ts'
+import {
+  CSRF_COOKIE_NAME,
+  CSRF_HEADER_NAME,
+  csrfMatches,
+  csrfTokenForSession,
+} from '../lib/csrf.ts'
 
 export type Role = 'user' | 'admin' | 'owner'
 
@@ -17,19 +24,37 @@ export type HonoEnv = {
 }
 
 export function sessionMiddleware(ctx: AppContext): MiddlewareHandler<HonoEnv> {
+  const csrfSecure = ctx.env.BETTER_AUTH_URL.startsWith('https')
   return async (c, next) => {
     c.set('ctx', ctx)
+    let resolved: HonoEnv['Variables']['session'] = null
     try {
       const session = await ctx.auth.api.getSession({ headers: c.req.raw.headers })
       // Banned users get treated as logged out — no enumeration of routes that would otherwise
       // succeed, no follow-on writes. They can still log in, but every request short-circuits here.
-      if (session && (session as { user: { banned?: boolean } }).user.banned) {
-        c.set('session', null)
-      } else {
-        c.set('session', session as HonoEnv['Variables']['session'])
+      if (session && !(session as { user: { banned?: boolean } }).user.banned) {
+        resolved = session as HonoEnv['Variables']['session']
       }
     } catch {
-      c.set('session', null)
+      resolved = null
+    }
+    c.set('session', resolved)
+    if (resolved) {
+      // Issue/refresh the CSRF cookie. Deterministic HMAC of the session id — stable for the
+      // session's lifetime, rotates automatically on re-login. SameSite=Strict so it never
+      // crosses origins; not httpOnly so the web client can mirror it back as X-CSRF-Token.
+      setCookie(
+        c,
+        CSRF_COOKIE_NAME,
+        csrfTokenForSession(resolved.session.id, ctx.env.BETTER_AUTH_SECRET),
+        {
+          sameSite: 'Strict',
+          secure: csrfSecure,
+          httpOnly: false,
+          path: '/',
+          ...(ctx.env.AUTH_COOKIE_DOMAIN ? { domain: ctx.env.AUTH_COOKIE_DOMAIN } : {}),
+        },
+      )
     }
     await next()
   }
@@ -87,6 +112,32 @@ export function requireSameOrigin(trustedOrigins: Array<string>): MiddlewareHand
     if (!origin || !trusted.has(origin)) {
       return c.json({ error: 'invalid_origin' }, 403)
     }
+    await next()
+  }
+}
+
+/**
+ * Double-submit CSRF check. Closes the gap requireSameOrigin can't: a non-browser caller with
+ * a stolen session cookie can spoof the Origin header trivially. The CSRF token is an HMAC of
+ * the session id sent both as a SameSite=Strict cookie and an X-CSRF-Token header — an
+ * attacker without our BETTER_AUTH_SECRET can't compute it, and the strict cookie never rides
+ * along on cross-site requests.
+ *
+ * Skipped on safe methods (no state change), on /api/auth/* (better-auth runs its own origin
+ * check + better-auth flows can't read the cookie before login), and when there's no session
+ * (requireAuth on the route handles it; nothing to defend yet).
+ */
+export function requireCsrf(): MiddlewareHandler<HonoEnv> {
+  const safeMethods = new Set(['GET', 'HEAD', 'OPTIONS'])
+  return async (c, next) => {
+    if (safeMethods.has(c.req.method)) return next()
+    if (c.req.path.startsWith('/api/auth/')) return next()
+    const session = c.get('session')
+    if (!session) return next()
+    const provided = c.req.header(CSRF_HEADER_NAME)
+    if (!provided) return c.json({ error: 'csrf_missing' }, 403)
+    const expected = csrfTokenForSession(session.session.id, c.get('ctx').env.BETTER_AUTH_SECRET)
+    if (!csrfMatches(provided, expected)) return c.json({ error: 'csrf_invalid' }, 403)
     await next()
   }
 }

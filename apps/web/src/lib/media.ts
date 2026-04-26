@@ -1,4 +1,5 @@
 import { API_URL } from "./env"
+import { readCsrfToken } from "./api"
 
 export interface UploadedMedia {
   id: string
@@ -29,10 +30,22 @@ export function pickVariantUrl(
   return media.variants[0]?.url ?? null
 }
 
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"])
+
 async function json<T>(path: string, init?: RequestInit): Promise<T> {
+  const method = (init?.method ?? "GET").toUpperCase()
+  const csrfHeader: Record<string, string> = {}
+  if (!SAFE_METHODS.has(method)) {
+    const token = readCsrfToken()
+    if (token) csrfHeader["X-CSRF-Token"] = token
+  }
   const res = await fetch(`${API_URL}${path}`, {
     credentials: "include",
-    headers: { "Content-Type": "application/json", ...(init?.headers ?? {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...csrfHeader,
+      ...(init?.headers ?? {}),
+    },
     ...init,
   })
   if (!res.ok) {
