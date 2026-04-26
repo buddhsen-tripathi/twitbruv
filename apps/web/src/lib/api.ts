@@ -500,6 +500,27 @@ export const api = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  chessActiveGames: () =>
+    request<{ games: Array<ChessGame> }>("/api/chess/active"),
+  chessPendingGames: () =>
+    request<{ games: Array<{ id: string; whitePlayerId: string; blackPlayerId: string; createdAt: string; challenger: PublicUser }> }>("/api/chess/pending"),
+  chessAcceptGame: (id: string) =>
+    request<{ game: ChessGame }>(`/api/chess/${id}/accept`, { method: "POST" }),
+  chessDeclineGame: (id: string) =>
+    request<{ game: ChessGame }>(`/api/chess/${id}/decline`, { method: "POST" }),
+  chessLeaderboard: () =>
+    request<{ leaderboard: Array<ChessStats> }>("/api/chess/leaderboard"),
+  chessGame: (id: string) => request<{ game: ChessGame }>(`/api/chess/${id}`),
+  chessCreateGame: (opponentId: string) =>
+    request<{ game: ChessGame }>("/api/chess", {
+      method: "POST",
+      body: JSON.stringify({ opponentId }),
+    }),
+  chessMove: (gameId: string, move: string) =>
+    request<{ game: ChessGame }>(`/api/chess/${gameId}/move`, {
+      method: "POST",
+      body: JSON.stringify({ move }),
+    }),
 }
 
 export type ReportReason =
@@ -1111,4 +1132,28 @@ export interface AnalyticsOverview {
   followerGrowth: Array<{ day: string; newFollowers: number }>
   impressionsByDay: Array<{ day: string; count: number }>
   topPosts: Array<Post>
+}
+
+export interface ChessGame {
+  id: string
+  whitePlayerId: string
+  blackPlayerId: string
+  fen: string
+  pgn: string
+  status: "ongoing" | "checkmate" | "draw" | "resigned" | "timeout" | "aborted"
+  winnerId: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ChessStats {
+  userId: string
+  elo: number
+  wins: number
+  losses: number
+  draws: number
+  name: string | null
+  handle: string | null
+  displayName: string | null
+  avatarUrl: string | null
 }
