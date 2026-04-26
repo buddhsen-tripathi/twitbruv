@@ -271,6 +271,12 @@ postsRoute.post('/', requireAuth(), async (c) => {
     githubMap.get(result.post.id),
   )
   await attachReplyParents({ db, viewerId: session.user.id, env, posts: [dto] })
+  c.get('ctx').track('post_created', session.user.id, {
+    has_media: !!body.mediaIds?.length,
+    has_poll: !!body.poll,
+    is_reply: !!body.replyToId,
+    is_quote: !!body.quoteOfId,
+  })
   return c.json({ post: dto }, 201)
 })
 
@@ -329,6 +335,7 @@ postsRoute.post('/:id/repost', requireAuth(), async (c) => {
     cache.del(homeFeedCacheKey(session.user.id), profileFeedCacheKey(session.user.id)),
     invalidateUnreadCounts(cache, result.notified),
   ])
+  c.get('ctx').track('post_reposted', session.user.id)
   return c.json({ ok: true })
 })
 
@@ -357,6 +364,7 @@ postsRoute.delete('/:id/repost', requireAuth(), async (c) => {
       .where(eq(schema.posts.id, id))
   })
 
+  c.get('ctx').track('post_unreposted', session.user.id)
   return c.json({ ok: true })
 })
 
@@ -398,6 +406,7 @@ postsRoute.post('/:id/like', requireAuth(), async (c) => {
   })
 
   await invalidateUnreadCounts(c.get('ctx').cache, notified)
+  c.get('ctx').track('post_liked', session.user.id)
   return c.json({ ok: true })
 })
 
@@ -419,6 +428,7 @@ postsRoute.delete('/:id/like', requireAuth(), async (c) => {
     }
   })
 
+  c.get('ctx').track('post_unliked', session.user.id)
   return c.json({ ok: true })
 })
 
@@ -443,6 +453,7 @@ postsRoute.post('/:id/bookmark', requireAuth(), async (c) => {
     }
   })
 
+  c.get('ctx').track('post_bookmarked', session.user.id)
   return c.json({ ok: true })
 })
 
@@ -464,6 +475,7 @@ postsRoute.delete('/:id/bookmark', requireAuth(), async (c) => {
     }
   })
 
+  c.get('ctx').track('post_unbookmarked', session.user.id)
   return c.json({ ok: true })
 })
 
@@ -733,6 +745,7 @@ postsRoute.patch('/:id', requireAuth(), async (c) => {
     loadPolls(db, session.user.id, [result.post.id]),
     loadGithubCards(db, [result.post.id]),
   ])
+  c.get('ctx').track('post_edited', session.user.id)
   return c.json({
     post: toPostDto(
       result.post,
@@ -776,6 +789,7 @@ postsRoute.post('/:id/pin', requireAuth(), async (c) => {
       .set({ pinnedAt: new Date() })
       .where(eq(schema.posts.id, id))
   })
+  c.get('ctx').track('post_pinned', session.user.id)
   return c.json({ ok: true })
 })
 
@@ -788,6 +802,7 @@ postsRoute.delete('/:id/pin', requireAuth(), async (c) => {
     .update(schema.posts)
     .set({ pinnedAt: null })
     .where(and(eq(schema.posts.id, id), eq(schema.posts.authorId, session.user.id)))
+  c.get('ctx').track('post_unpinned', session.user.id)
   return c.json({ ok: true })
 })
 
@@ -855,6 +870,7 @@ postsRoute.delete('/:id', requireAuth(), async (c) => {
   })
 
   await cache.del(homeFeedCacheKey(session.user.id))
+  c.get('ctx').track('post_deleted', session.user.id)
   return c.json({ ok: true })
 })
 
@@ -956,6 +972,7 @@ postsRoute.post('/:id/hide', requireAuth(), async (c) => {
     .update(schema.posts)
     .set({ hiddenAt: new Date() })
     .where(eq(schema.posts.id, post.id))
+  c.get('ctx').track('post_hidden', session.user.id)
   return c.json({ ok: true })
 })
 
@@ -991,6 +1008,7 @@ postsRoute.delete('/:id/hide', requireAuth(), async (c) => {
     .update(schema.posts)
     .set({ hiddenAt: null })
     .where(eq(schema.posts.id, post.id))
+  c.get('ctx').track('post_unhidden', session.user.id)
   return c.json({ ok: true })
 })
 

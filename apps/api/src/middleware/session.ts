@@ -26,8 +26,23 @@ export type HonoEnv = {
 export function sessionMiddleware(ctx: AppContext): MiddlewareHandler<HonoEnv> {
   const csrfSecure = ctx.env.BETTER_AUTH_URL.startsWith('https')
   return async (c, next) => {
-    c.set('ctx', ctx)
     let resolved: HonoEnv['Variables']['session'] = null
+    // Bind Databuddy anonymous + session IDs from the client so server-side events
+    // are stitched to the same visitor journey in the analytics dashboard.
+    // These are analytics identity only — not trusted for auth or billing.
+    const headerOrNull = (name: string) => {
+      const value = c.req.header(name)?.trim()
+      return value || null
+    }
+    const dbIds = {
+      anonymousId: headerOrNull('X-Db-Anon-Id'),
+      sessionId: headerOrNull('X-Db-Session-Id'),
+    }
+    const requestCtx: AppContext = {
+      ...ctx,
+      track: (name, userId, properties) => ctx.track(name, userId, properties, dbIds),
+    }
+    c.set('ctx', requestCtx)
     try {
       const session = await ctx.auth.api.getSession({ headers: c.req.raw.headers })
       // Banned users get treated as logged out — no enumeration of routes that would otherwise
